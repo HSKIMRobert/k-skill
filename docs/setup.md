@@ -94,6 +94,8 @@ bash scripts/check-setup.sh
 
 - [SRT 예매 가이드](features/srt-booking.md)
 - [KTX 예매 가이드](features/ktx-booking.md)
+- [고속버스 예매 가이드](features/express-bus-booking.md)
+- [시외버스 예매 가이드](features/intercity-bus-booking.md)
 - [자연휴양림 빈 객실 조회 가이드](features/foresttrip-vacancy.md)
 - [서울 지하철 도착정보 가이드](features/seoul-subway-arrival.md)
 - [한국 날씨 조회 가이드](features/korea-weather.md)
