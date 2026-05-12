@@ -8,22 +8,26 @@ function buildSearchUrl(query) {
 }
 
 async function searchClinics(options = {}) {
-  const { query, limit = 5, fetcher = global.fetch } = options
+  const { query, limit = 5, fetcher = global.fetch, signal, timeoutMs = 10000 } = options
   const normalizedQuery = cleanText(query)
   if (!normalizedQuery) throw new Error("query is required for Gangnam Unni clinic search")
   if (!fetcher) throw new Error("fetch is required")
 
   const url = buildSearchUrl(normalizedQuery)
-  const response = await fetcher(url, {
+  const requestOptions = {
     headers: {
       "user-agent": "Mozilla/5.0 (compatible; k-skill/gangnamunni-clinic-search)",
       accept: "text/html,application/xhtml+xml"
     }
-  })
+  }
+  const requestSignal = signal || createTimeoutSignal(timeoutMs)
+  if (requestSignal) requestOptions.signal = requestSignal
+
+  const response = await fetcher(url, requestOptions)
 
   if (!response || !response.ok) {
     const status = response ? `${response.status} ${response.statusText || ""}`.trim() : "no response"
-    throw new Error(`request failed for ${url}: ${status}`)
+    throw new Error(`request failed for ${redactSearchUrl(url)}: ${status}`)
   }
 
   const html = await response.text()
@@ -64,10 +68,33 @@ function parseNextData(html) {
   classifyBlockedBody(source)
   const match = source.match(/<script\b[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i)
   if (!match) throw new Error("Gangnam Unni next data payload not found")
+  const payload = match[1].trim()
   try {
-    return JSON.parse(decodeHtmlEntities(match[1].trim()))
-  } catch (error) {
-    throw new Error(`Gangnam Unni next data payload could not be parsed: ${error.message}`)
+    return JSON.parse(payload)
+  } catch (rawError) {
+    try {
+      return JSON.parse(decodeHtmlEntities(payload))
+    } catch (decodedError) {
+      const message = `Gangnam Unni next data payload could not be parsed: ${rawError.message}`
+      throw new Error(`${message}; decoded fallback failed: ${decodedError.message}`)
+    }
+  }
+}
+
+function createTimeoutSignal(timeoutMs) {
+  const numericTimeoutMs = Number(timeoutMs)
+  if (!Number.isFinite(numericTimeoutMs) || numericTimeoutMs <= 0) return null
+  if (typeof AbortSignal === "undefined" || typeof AbortSignal.timeout !== "function") return null
+  return AbortSignal.timeout(numericTimeoutMs)
+}
+
+function redactSearchUrl(value) {
+  try {
+    const url = new URL(String(value))
+    const serialized = url.toString()
+    return serialized.replace(/([?&]q=)[^&]*/i, "$1<redacted>")
+  } catch {
+    return String(value || "").replace(/([?&]q=)[^&]*/i, "$1<redacted>")
   }
 }
 
@@ -155,5 +182,7 @@ module.exports = {
   parseSearchHtml,
   parseNextData,
   normalizeHospital,
+  createTimeoutSignal,
+  redactSearchUrl,
   cleanText
 }

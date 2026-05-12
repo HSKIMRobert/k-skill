@@ -65,6 +65,29 @@ test("parseNextData reads escaped Next.js JSON payloads", () => {
   assert.equal(data.props.pageProps.hospitals.length, 2)
 })
 
+test("parseNextData preserves literal entity-looking text inside valid JSON strings", () => {
+  const data = {
+    props: {
+      pageProps: {
+        hospitals: [{ id: 1, name: "A &quot; Clinic &amp; Care" }]
+      }
+    }
+  }
+  const html = `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify(data)}</script>`
+
+  const parsed = parseNextData(html)
+
+  assert.equal(parsed.props.pageProps.hospitals[0].name, "A &quot; Clinic &amp; Care")
+})
+
+test("parseNextData falls back to entity-decoded legacy payloads", () => {
+  const html = `<script id="__NEXT_DATA__" type="application/json">{&quot;props&quot;:{&quot;pageProps&quot;:{&quot;keyword&quot;:&quot;강남&quot;}}}</script>`
+
+  const parsed = parseNextData(html)
+
+  assert.equal(parsed.props.pageProps.keyword, "강남")
+})
+
 test("parseNextData classifies login, captcha, blocked, and empty-shell failures", () => {
   assert.throws(() => parseNextData("로그인이 필요합니다"), /login required/i)
   assert.throws(() => parseNextData("captcha challenge"), /captcha/i)
@@ -101,10 +124,10 @@ test("parseSearchHtml returns query metadata, limited clinic items, source, and 
   assert.match(result.warnings.join("\n"), /returned 1 of 2 parsed hospitals/)
 })
 
-test("searchClinics fetches the search page and parses clinics", async () => {
+test("searchClinics fetches the search page with a default timeout and parses clinics", async () => {
   const seen = []
   const fetcher = async (url, options) => {
-    seen.push({ url: String(url), headers: options.headers })
+    seen.push({ url: String(url), headers: options.headers, signal: options.signal })
     return {
       ok: true,
       status: 200,
@@ -117,7 +140,21 @@ test("searchClinics fetches the search page and parses clinics", async () => {
 
   assert.equal(seen[0].url, buildSearchUrl("강남 성형외과"))
   assert.match(seen[0].headers["user-agent"], /k-skill\/gangnamunni-clinic-search/)
+  assert.ok(seen[0].signal, "expected a default abort signal")
   assert.equal(result.items.length, 2)
+})
+
+test("searchClinics lets callers inject an abort signal", async () => {
+  const controller = new AbortController()
+  let seenSignal
+  const fetcher = async (_url, options) => {
+    seenSignal = options.signal
+    return { ok: true, status: 200, statusText: "OK", text: async () => sampleHtml }
+  }
+
+  await searchClinics({ query: "강남", fetcher, signal: controller.signal })
+
+  assert.equal(seenSignal, controller.signal)
 })
 
 test("searchClinics rejects missing query and failed upstream responses", async () => {
@@ -127,17 +164,26 @@ test("searchClinics rejects missing query and failed upstream responses", async 
       query: "강남",
       fetcher: async () => ({ ok: false, status: 503, statusText: "Service Unavailable" })
     }),
-    /request failed.*503 Service Unavailable/
+    (error) => {
+      assert.match(error.message, /request failed.*503 Service Unavailable/)
+      assert.match(error.message, /q=<redacted>/)
+      assert.doesNotMatch(error.message, /%EA%B0%95%EB%82%A8|강남/)
+      return true
+    }
   )
 })
 
 test("CLI parses options and supports help", () => {
   const cli = require("../src/cli")
 
-  assert.deepEqual(cli.parseArgs(["강남 성형외과", "--limit", "3"]), {
+  assert.deepEqual(cli.parseArgs(["강남 성형외과", "--limit", "3", "--debug"]), {
     query: "강남 성형외과",
-    limit: 3
+    limit: 3,
+    debug: true
   })
+
+  assert.equal(cli.formatError(new Error("plain failure"), { debug: false }), "plain failure")
+  assert.match(cli.formatError(new Error("debug failure"), { debug: true }), /Error: debug failure/)
 
   const help = spawnSync(process.execPath, ["src/cli.js", "--help"], {
     cwd: __dirname + "/..",
