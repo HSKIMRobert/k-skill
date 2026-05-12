@@ -225,6 +225,7 @@ def offers(pcode: str, limit: int = 20, include_shipping: bool = False) -> Dict[
         )
         if len(rows) >= limit:
             break
+    rows.sort(key=lambda row: (row["total_price"] is None, row["total_price"] or row["price"]))
     return {"pcode": str(pcode), "title": meta.get("sProductFullName"), "source_url": meta["source_url"], "count": len(rows), "offers": rows, "meta": {"extraction": "danawa-price-ajax", "include_shipping": include_shipping, "ts": int(time.time())}}
 
 

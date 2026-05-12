@@ -21,7 +21,7 @@
 ```bash
 python3 danawa-price-search/scripts/danawa_search.py search "맥북 에어 M4" --limit 5
 python3 danawa-price-search/scripts/danawa_search.py offers 28208783 --limit 10
-python3 danawa-price-search/scripts/danawa_search.py compare "갤럭시 S25" --products 3 --offers 5
+python3 danawa-price-search/scripts/danawa_search.py compare "갤럭시 S25" --limit 3 --offers 5
 ```
 
 ## 출력 해석
@@ -36,7 +36,7 @@ python3 danawa-price-search/scripts/danawa_search.py compare "갤럭시 S25" --p
 - `card_price`: 카드 적용 표시가
 - `card_discount`: 표시가와 카드가 차액
 - `installment`: 무이자 할부 문구
-- `link`: 다나와 경유 링크
+- `url`: 다나와 경유 링크
 
 사용자에게는 `total_price` 기준으로 정렬한 Markdown 표를 먼저 보여주고, 카드가는 별도 열에 표시합니다.
 
