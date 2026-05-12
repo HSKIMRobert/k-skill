@@ -72,6 +72,8 @@ bash scripts/check-setup.sh
 | --- | --- |
 | SRT 예매 | `KSKILL_SRT_ID`, `KSKILL_SRT_PASSWORD` |
 | KTX 예매 | `KSKILL_KTX_ID`, `KSKILL_KTX_PASSWORD` |
+| 고속버스 예매 | 사용자 시크릿 불필요 (조회·좌석 단계는 공식 KOBUS HTTP 흐름 사용, 결제는 공식 페이지에서 수동 진행) |
+| 시외버스 예매 | 사용자 시크릿 불필요 (조회·좌석 단계는 공식 티머니 HTTP 흐름 사용, 결제는 공식 페이지에서 수동 진행) |
 | 자연휴양림 빈 객실 조회 | `KSKILL_FORESTTRIP_ID`, `KSKILL_FORESTTRIP_PASSWORD` |
 | 한국 법령 검색 (로컬 CLI/MCP) | `LAW_OC` |
 | 한국 법령 검색 (remote MCP endpoint) | 사용자 시크릿 불필요 (`url`만 등록, 장애 시 `법망` fallback 가능) |
@@ -94,6 +96,8 @@ bash scripts/check-setup.sh
 
 - [SRT 예매 가이드](features/srt-booking.md)
 - [KTX 예매 가이드](features/ktx-booking.md)
+- [고속버스 예매 가이드](features/express-bus-booking.md)
+- [시외버스 예매 가이드](features/intercity-bus-booking.md)
 - [자연휴양림 빈 객실 조회 가이드](features/foresttrip-vacancy.md)
 - [서울 지하철 도착정보 가이드](features/seoul-subway-arrival.md)
 - [한국 날씨 조회 가이드](features/korea-weather.md)
