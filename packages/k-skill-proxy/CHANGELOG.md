@@ -1,5 +1,15 @@
 # k-skill-proxy
 
+## 0.3.0
+
+### Minor Changes
+
+- 315dbbb: Add `/v1/seoul-density/citydata` route that proxies the Seoul Open Data realtime hotspot crowd-level API (`citydata_ppltn`) using the server-side `SEOUL_OPEN_API_KEY`.
+
+### Patch Changes
+
+- cd3366a: Add National Tax Service business registration status and authenticity proxy routes.
+
 ## 0.2.1
 
 ### Patch Changes
