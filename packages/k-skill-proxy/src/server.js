@@ -2642,7 +2642,63 @@ function buildServer({ env = process.env, provider = null, now = () => new Date(
   });
 
 
-  async function handleNtsBusinessRoute({ operation, route, normalizer, request, reply }) {
+  function getNtsUpstreamStatusCode(parsed) {
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+
+    return parsed.status_code
+      ?? parsed.statusCode
+      ?? parsed.resultCode
+      ?? parsed.response?.header?.resultCode
+      ?? null;
+  }
+
+  function isNtsUpstreamSemanticFailure(parsed) {
+    const statusCode = getNtsUpstreamStatusCode(parsed);
+    if (statusCode === null || statusCode === undefined) {
+      return false;
+    }
+
+    return !["OK", "00", "0", "SUCCESS"].includes(String(statusCode).toUpperCase());
+  }
+
+  const ntsValidateSensitiveResponseKeys = new Set([
+    "b_adr",
+    "b_nm",
+    "b_sector",
+    "b_type",
+    "corp_no",
+    "p_nm",
+    "p_nm2",
+    "start_dt"
+  ]);
+
+  function redactNtsBusinessValidateResponse(value) {
+    if (Array.isArray(value)) {
+      return value.map(redactNtsBusinessValidateResponse);
+    }
+    if (!value || typeof value !== "object") {
+      return value;
+    }
+
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => !ntsValidateSensitiveResponseKeys.has(key))
+        .map(([key, entryValue]) => [key, redactNtsBusinessValidateResponse(entryValue)])
+    );
+  }
+
+  async function handleNtsBusinessRoute({
+    operation,
+    route,
+    normalizer,
+    request,
+    reply,
+    cacheSuccess = true,
+    includeQuery = true,
+    responseMapper = (body) => body
+  }) {
     let normalized;
 
     try {
@@ -2655,22 +2711,26 @@ function buildServer({ env = process.env, provider = null, now = () => new Date(
       };
     }
 
-    const cacheKey = makeCacheKey({
-      route,
-      ...normalized
-    });
-    const cached = cache.get(cacheKey);
-    if (cached) {
-      return {
-        ...cached,
-        proxy: {
-          ...cached.proxy,
-          cache: {
-            hit: true,
-            ttl_ms: config.cacheTtlMs
+    const cacheKey = cacheSuccess
+      ? makeCacheKey({
+        route,
+        ...normalized
+      })
+      : null;
+    if (cacheKey) {
+      const cached = cache.get(cacheKey);
+      if (cached) {
+        return {
+          ...cached,
+          proxy: {
+            ...cached.proxy,
+            cache: {
+              hit: true,
+              ttl_ms: config.cacheTtlMs
+            }
           }
-        }
-      };
+        };
+      }
     }
 
     let upstream;
@@ -2714,10 +2774,19 @@ function buildServer({ env = process.env, provider = null, now = () => new Date(
       };
     }
 
-    if (upstream.statusCode < 200 || upstream.statusCode >= 300 || parsed.error) {
+    const responseBody = responseMapper(parsed);
+
+    if (
+      upstream.statusCode < 200
+      || upstream.statusCode >= 300
+      || parsed.error
+      || isNtsUpstreamSemanticFailure(parsed)
+    ) {
       reply.code(upstream.statusCode >= 400 ? upstream.statusCode : 502);
       return {
-        ...parsed,
+        ...responseBody,
+        error: parsed.error || "upstream_error",
+        upstream_status_code: getNtsUpstreamStatusCode(parsed) || undefined,
         proxy: {
           name: config.proxyName,
           cache: {
@@ -2730,8 +2799,7 @@ function buildServer({ env = process.env, provider = null, now = () => new Date(
     }
 
     const payload = {
-      ...parsed,
-      query: normalized,
+      ...responseBody,
       proxy: {
         name: config.proxyName,
         cache: {
@@ -2741,8 +2809,13 @@ function buildServer({ env = process.env, provider = null, now = () => new Date(
         requested_at: new Date().toISOString()
       }
     };
+    if (includeQuery) {
+      payload.query = normalized;
+    }
 
-    cache.set(cacheKey, payload, config.cacheTtlMs);
+    if (cacheKey) {
+      cache.set(cacheKey, payload, config.cacheTtlMs);
+    }
     return payload;
   }
 
@@ -2758,6 +2831,9 @@ function buildServer({ env = process.env, provider = null, now = () => new Date(
     operation: "validate",
     route: "nts-business-validate",
     normalizer: normalizeNtsBusinessValidateQuery,
+    cacheSuccess: false,
+    includeQuery: false,
+    responseMapper: redactNtsBusinessValidateResponse,
     request,
     reply
   }));

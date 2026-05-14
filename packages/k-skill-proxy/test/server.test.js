@@ -289,6 +289,112 @@ test("NTS business validate route normalizes businesses and reports missing key"
   });
 });
 
+test("NTS business validate route does not cache or echo sensitive query fields", async (t) => {
+  const originalFetch = global.fetch;
+  const calls = [];
+  global.fetch = async (url, options) => {
+    calls.push({ url: String(url), options });
+    return new Response(
+      JSON.stringify({
+        status_code: "OK",
+        valid_cnt: 1,
+        data: [{
+          b_no: "1234567890",
+          valid: "01",
+          request_param: {
+            b_no: "1234567890",
+            start_dt: "20200101",
+            p_nm: "홍길동",
+            b_adr: "서울시 중구"
+          }
+        }]
+      }),
+      { status: 200, headers: { "content-type": "application/json;charset=UTF-8" } }
+    );
+  };
+
+  const app = buildServer({ env: { DATA_GO_KR_API_KEY: "data-go-key" } });
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const payload = {
+    businesses: [{
+      b_no: "123-45-67890",
+      start_dt: "2020.01.01",
+      p_nm: "홍길동",
+      b_adr: "서울시 중구"
+    }]
+  };
+
+  const first = await app.inject({
+    method: "POST",
+    url: "/v1/nts-business/validate",
+    payload
+  });
+  const firstBody = first.json();
+  const firstBodyText = JSON.stringify(firstBody);
+
+  assert.equal(first.statusCode, 200);
+  assert.equal(firstBody.proxy.cache.hit, false);
+  assert.equal(firstBody.query, undefined, "validate responses must not echo representative/date/address inputs");
+  assert.equal(firstBodyText.includes("홍길동"), false);
+  assert.equal(firstBodyText.includes("20200101"), false);
+  assert.equal(firstBodyText.includes("서울시 중구"), false);
+  assert.deepEqual(firstBody.data[0].request_param, { b_no: "1234567890" });
+
+  const second = await app.inject({
+    method: "POST",
+    url: "/v1/nts-business/validate",
+    payload
+  });
+  const secondBody = second.json();
+
+  assert.equal(second.statusCode, 200);
+  assert.equal(secondBody.proxy.cache.hit, false);
+  assert.equal(calls.length, 2, "validate successes must not be cached because they contain sensitive inputs");
+});
+
+test("NTS business semantic upstream failures are non-cacheable errors", async (t) => {
+  const originalFetch = global.fetch;
+  let calls = 0;
+  global.fetch = async () => {
+    calls += 1;
+    return new Response(
+      JSON.stringify({ status_code: "SERVICE_ERROR", message: "upstream service failure" }),
+      { status: 200, headers: { "content-type": "application/json;charset=UTF-8" } }
+    );
+  };
+
+  const app = buildServer({ env: { DATA_GO_KR_API_KEY: "data-go-key" } });
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const first = await app.inject({
+    method: "POST",
+    url: "/v1/nts-business/status",
+    payload: { b_no: ["1234567890"] }
+  });
+  const firstBody = first.json();
+
+  assert.equal(first.statusCode, 502);
+  assert.equal(firstBody.error, "upstream_error");
+  assert.equal(firstBody.upstream_status_code, "SERVICE_ERROR");
+  assert.equal(firstBody.proxy.cache.hit, false);
+
+  const second = await app.inject({
+    method: "POST",
+    url: "/v1/nts-business/status",
+    payload: { b_no: ["1234567890"] }
+  });
+
+  assert.equal(second.statusCode, 502);
+  assert.equal(calls, 2, "semantic upstream failures must not be cached");
+});
+
 test("NTS business route maps upstream fetch failures to 502 without caching", async (t) => {
   const originalFetch = global.fetch;
   let calls = 0;
