@@ -90,6 +90,26 @@ test("buildSearchUrl targets the public SH list page directly and sets srchTp", 
   assert.equal(url.searchParams.get("multi_itm_seq"), "2")
 })
 
+test("buildSearchUrl normalizes public helper inputs before building URLs", () => {
+  const koreanAlias = buildSearchUrl({ keyword: "행복주택", category: "임대", page: 1 })
+  const englishAlias = buildSearchUrl({ keyword: "행복주택", category: "rent", page: 1 })
+
+  assert.equal(koreanAlias.pathname, CATEGORY_CONFIGS.rent.path + "/list.do")
+  assert.equal(koreanAlias.searchParams.get("srchWord"), "행복주택")
+  assert.equal(koreanAlias.searchParams.get("srchTp"), "0")
+  assert.equal(koreanAlias.searchParams.get("multi_itm_seq"), "2")
+  assert.equal(englishAlias.searchParams.get("srchTp"), "0")
+})
+
+test("buildDetailUrl normalizes public helper inputs before building URLs", () => {
+  const url = buildDetailUrl({ seq: "304371", category: "임대" })
+
+  assert.equal(url.hostname, "www.i-sh.co.kr")
+  assert.equal(url.pathname, CATEGORY_CONFIGS.rent.path + "/view.do")
+  assert.equal(url.searchParams.get("multi_itm_seq"), "2")
+  assert.equal(url.searchParams.get("seq"), "304371")
+})
+
 test("buildSearchUrl uses official category-specific board paths", () => {
   const sale = buildSearchUrl(normalizeSearchOptions({ category: "분양" }))
   const welfare = buildSearchUrl(normalizeSearchOptions({ category: "welfare" }))

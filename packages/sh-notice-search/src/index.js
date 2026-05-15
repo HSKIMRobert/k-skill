@@ -225,7 +225,7 @@ function normalizeDetailOptions(options = {}) {
 }
 
 function buildSearchUrl(options = {}) {
-  const normalized = options.category && options.page ? options : normalizeSearchOptions(options)
+  const normalized = normalizeSearchOptions(options)
   const config = CATEGORY_CONFIGS[normalized.category]
   const url = new URL(`${SH_BASE_URL}${config.path}/list.do`)
   if (config.multiItmSeqs) url.searchParams.set("multi_itm_seqs", config.multiItmSeqs)
@@ -237,7 +237,7 @@ function buildSearchUrl(options = {}) {
 }
 
 function buildDetailUrl(options = {}) {
-  const normalized = options.category && options.seq ? options : normalizeDetailOptions(options)
+  const normalized = normalizeDetailOptions(options)
   const config = CATEGORY_CONFIGS[normalized.category]
   const url = new URL(`${SH_BASE_URL}${config.path}/view.do`)
   if (config.multiItmSeq) url.searchParams.set("multi_itm_seq", config.multiItmSeq)
