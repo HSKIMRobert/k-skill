@@ -628,6 +628,44 @@ test("getStorePickupStock sends Bearer auth headers and returns blocked after re
   }
 })
 
+test("getStorePickupStock preserves caller headers while auth headers take precedence", async () => {
+  const originalFetch = global.fetch
+  let capturedHeaders = null
+
+  global.fetch = async (url, init = {}) => {
+    if (String(url).includes("/api/auth/request")) {
+      return makeAuthResponse()
+    }
+
+    if (String(url).includes("/api/pd/pdh/selStrPkupStck")) {
+      capturedHeaders = init.headers
+      return makeResponse(storePickupStockPayload)
+    }
+
+    return new Response("not found", { status: 404 })
+  }
+
+  try {
+    await getStorePickupStock(
+      { pdNo: "1049275", strCd: "10224" },
+      {
+        headers: {
+          "X-Trace-Id": "trace-207",
+          Authorization: "Bearer caller-value",
+          "X-DM-UID": "caller-uid"
+        }
+      }
+    )
+
+    assert.equal(capturedHeaders["X-Trace-Id"], "trace-207")
+    assert.match(capturedHeaders.Authorization, /^Bearer /)
+    assert.notEqual(capturedHeaders.Authorization, "Bearer caller-value")
+    assert.equal(capturedHeaders["X-DM-UID"], "test-uid-123")
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
 test("getStorePickupEligibility posts pdNo and a derived store keyword to selPkupStr", async () => {
   const originalFetch = global.fetch
   let capturedBody = null

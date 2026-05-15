@@ -168,7 +168,11 @@ async function getStorePickupStock(request, options = {}) {
     const payload = await requestJson(`${BASE_API_URL}/pd/pdh/selStrPkupStck`, {
       ...options,
       method: "POST",
-      headers: { Authorization: `Bearer ${bearer}`, "X-DM-UID": uid },
+      headers: {
+        ...(options.headers || {}),
+        Authorization: `Bearer ${bearer}`,
+        "X-DM-UID": uid
+      },
       body
     })
 

@@ -35,6 +35,7 @@
 - product summary list: `https://www.daisomall.co.kr/ssn/search/GoodsMummResult`
 - auth (비로그인 JWT 발급): `https://www.daisomall.co.kr/api/auth/request`
 - store pickup stock: `https://www.daisomall.co.kr/api/pd/pdh/selStrPkupStck` (Bearer 인증 필요)
+- pickup eligibility fallback: `https://www.daisomall.co.kr/api/ms/msg/selPkupStr`
 - optional online stock: `https://www.daisomall.co.kr/api/pdo/selOnlStck`
 
 ## 기본 흐름
@@ -46,8 +47,9 @@
 5. `GET /api/auth/request` 로 비로그인 JWT를 받아 AES-128-CBC / 키 `"PRE_AUTH_ENC_KEY"` 로 암호화한 뒤 Bearer 헤더를 빌드합니다.
 6. `selStrPkupStck` 에 Bearer 헤더를 실어 해당 매장의 상품 재고를 확인합니다.
 7. 403 응답이 오면 `/api/auth/request` 를 재호출해 Bearer를 새로 빌드한 뒤 한 번 재시도합니다.
-8. 필요하면 `SearchGoods` 응답의 `onldPdNo` 를 함께 보존해 `selOnlStck` 온라인 재고 교차 확인에 사용합니다.
-9. 공식 표면이 매장 내 위치를 주지 않으면 재고 중심으로 답합니다.
+8. Bearer 재시도 후에도 401/403이면 `pickupStock.retrievalStatus: "blocked"` 를 반환하고, 선택적으로 `selPkupStr` 기반 `pickupEligibility` 로 픽업 가능 여부를 보조 확인합니다.
+9. 필요하면 `SearchGoods` 응답의 `onldPdNo` 를 함께 보존해 `selOnlStck` 온라인 재고 교차 확인에 사용합니다.
+10. 공식 표면이 매장 내 위치를 주지 않으면 재고 중심으로 답합니다.
 
 ## 예시
 

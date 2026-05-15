@@ -62,7 +62,9 @@ metadata:
 - product search summary: `https://www.daisomall.co.kr/ssn/search/Search`
 - product search list: `https://www.daisomall.co.kr/ssn/search/SearchGoods`
 - product summary list: `https://www.daisomall.co.kr/ssn/search/GoodsMummResult`
+- auth (비로그인 JWT 발급): `https://www.daisomall.co.kr/api/auth/request`
 - store pickup stock: `https://www.daisomall.co.kr/api/pd/pdh/selStrPkupStck`  ← **인증 필요**
+- pickup eligibility fallback: `https://www.daisomall.co.kr/api/ms/msg/selPkupStr`
 - optional online stock cross-check: `https://www.daisomall.co.kr/api/pdo/selOnlStck`
 
 ## Workflow
@@ -168,6 +170,7 @@ console.log(result.pickupStock)
 - 공식 재고는 시점 차이로 실제 방문 시 수량이 달라질 수 있다.
 - 현재 확인된 공식 표면은 **매장 내 aisle/진열 위치**를 직접 주지 않을 수 있다.
 - `selStrPkupStck` 403 → `/api/auth/request` 재호출 후 Bearer를 새로 빌드해 재시도한다.
+- Bearer 재시도 후에도 401/403이면 재고 수량은 `retrievalStatus: "blocked"` 로 표시하고, `selPkupStr` 기반 `pickupEligibility`(픽업 가능 여부)만 보조 정보로 제공한다.
 
 ## Notes
 
@@ -176,3 +179,4 @@ console.log(result.pickupStock)
 - 공식 표면이 위치를 주지 않으면 억지 추정을 하지 않는다.
 - 인증 키(`PRE_AUTH_ENC_KEY`)는 JS 번들에 하드코딩되어 있으며 변경될 수 있다.
 - `selStrPkupStck` 호출 시: `/api/auth/request` 호출 후 Bearer를 만들어 시도한다.
+- fallback order: Bearer 재고 조회 → 401/403 시 토큰 재발급 후 1회 재시도 → 구조화된 blocked 재고 → 선택적 `selPkupStr` 픽업 가능 여부.

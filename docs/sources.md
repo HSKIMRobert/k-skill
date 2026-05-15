@@ -112,6 +112,7 @@
 - 다이소몰 상품 요약 목록: https://www.daisomall.co.kr/ssn/search/GoodsMummResult
 - 다이소몰 비로그인 인증: https://www.daisomall.co.kr/api/auth/request (응답 바디: JWT 평문, 응답 헤더 x-dm-uid; AES-128-CBC / 키 PRE_AUTH_ENC_KEY 로 암호화 후 Bearer 헤더로 전달)
 - 다이소몰 매장 픽업 재고: https://www.daisomall.co.kr/api/pd/pdh/selStrPkupStck (Authorization: Bearer 헤더 필요)
+- 다이소몰 매장 픽업 가능 여부 fallback: https://www.daisomall.co.kr/api/ms/msg/selPkupStr (Bearer 재고 조회가 401/403으로 계속 막힐 때 `pickupEligibility` 보조 정보로 사용)
 - 다이소몰 온라인 재고: https://www.daisomall.co.kr/api/pdo/selOnlStck
 - 강남언니 공개 검색: https://www.gangnamunni.com/search?q=<keyword>
 - 강남언니 공개 병원 페이지: https://www.gangnamunni.com/hospitals/<id>
