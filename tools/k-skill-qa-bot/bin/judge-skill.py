@@ -100,13 +100,15 @@ def _call_judge(prompt: str, schema_path, model: str, timeout: int) -> dict:
     if not codex:
         return {"verdict": "fail", "reason": "codex CLI not found", "symptom_class": "cli-missing", "confidence": 1.0, "evidence_quote": ""}
 
+    provider = os.environ.get("CODEX_PROVIDER", "openai")
     cmd = []
     if gtimeout:
         cmd += [gtimeout, str(timeout)]
-    cmd += [codex, "exec", "--json", "--ephemeral", "-s", "read-only",
+    cmd += [codex, "exec", "--json", "--ephemeral",
+            "--dangerously-bypass-approvals-and-sandbox",
             "--skip-git-repo-check", "-m", model,
             "--output-schema", str(schema_path),
-            "-c", "approval_policy=never",
+            "-c", f'model_provider="{provider}"',
             prompt]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True,

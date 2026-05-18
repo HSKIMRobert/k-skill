@@ -60,9 +60,10 @@ START_MS=$(python3 -c 'import time;print(int(time.time()*1000))')
 
 set +e
 "$TIMEOUT_BIN" --kill-after=15 "$TIMEOUT_SECS" \
-    "$CODEX_BIN" exec --json -s read-only --skip-git-repo-check --ephemeral \
+    "$CODEX_BIN" exec --json --dangerously-bypass-approvals-and-sandbox \
+        --skip-git-repo-check --ephemeral \
         -C "$K_SKILL_CLONE" -m "$CODEX_MODEL" \
-        -c approval_policy=never \
+        -c "model_provider=\"${CODEX_PROVIDER:-openai}\"" \
         "$PROMPT" \
     </dev/null >"$JSONL" 2>"$STDERR"
 EXIT_CODE=$?
