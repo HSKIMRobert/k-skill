@@ -909,6 +909,41 @@ test("Naver Map endpoints sanitize upstream auth errors as 503 without leaking t
   }
 });
 
+test("Naver Map endpoints preserve upstream 429 for caller backoff", async (t) => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => new Response("quota exceeded diagnostic", {
+    status: 429,
+    headers: { "content-type": "text/plain" }
+  });
+
+  const app = buildServer({
+    env: {
+      NAVER_MAP_CLIENT_ID: "id",
+      NAVER_MAP_CLIENT_SECRET: "secret"
+    }
+  });
+
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const cases = [
+    "/v1/naver-map/directions?start=126.9,37.5&goal=127.0,37.5",
+    "/v1/naver-map/geocode?q=%EC%84%9C%EC%9A%B8%EC%97%AD",
+    "/v1/naver-map/reverse-geocode?coords=126.9,37.5"
+  ];
+
+  for (const url of cases) {
+    const response = await app.inject({ method: "GET", url });
+    assert.equal(response.statusCode, 429);
+    const body = response.json();
+    assert.equal(body.error, "upstream_error");
+    assert.equal(body.upstream.status_code, 429);
+    assert.equal(body.upstream.body_snippet, "quota exceeded diagnostic");
+  }
+});
+
 test("Naver Map directions endpoint keeps non-auth upstream snippets for diagnostics", async (t) => {
   const originalFetch = global.fetch;
   global.fetch = async () => new Response("Transient upstream diagnostic", {
@@ -1019,6 +1054,14 @@ test("Naver Map reverse-geocode endpoint validates coords and orders", async (t)
     url: "/v1/naver-map/reverse-geocode?coords=127.0,37.5&orders=banana"
   });
   assert.equal(badOrder.statusCode, 400);
+
+  const xmlOutput = await app.inject({
+    method: "GET",
+    url: "/v1/naver-map/reverse-geocode?coords=127.0,37.5&output=xml"
+  });
+  assert.equal(xmlOutput.statusCode, 400);
+  assert.equal(xmlOutput.json().error, "bad_request");
+  assert.match(xmlOutput.json().message, /output as json/);
 });
 
 test("Naver Map health endpoint reflects naverMapConfigured flag", async (t) => {

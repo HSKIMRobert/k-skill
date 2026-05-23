@@ -45,7 +45,7 @@
 4. live 모드:
    - 주소만 있으면 `/v1/naver-map/geocode` 로 좌표를 얻는다.
    - `/v1/naver-map/directions` 로 경로를 조회한다.
-   - 응답의 `route.trafast[0].summary` 를 거리/시간/통행료/연료비로 매핑한다.
+   - 기본 `option=trafast` 응답은 `route.trafast[0].summary` 를, 다른 option을 명시한 경우 `route[option][0].summary` 를 거리/시간/통행료/연료비로 매핑한다.
 5. live 실패(503/502/네트워크) 시 mock fallback 으로 떨어지고, 사용자에게 fallback 임을 명시한다.
 
 ## 예시
@@ -90,6 +90,7 @@ curl -fsS --get "${BASE}/v1/naver-map/directions" \
 
 - 키 누락(`503 upstream_not_configured`) → mock fallback + 사용자에게 안내
 - 인증 실패(401/403) → proxy 가 `503` 으로 변환 → mock fallback
+- quota/rate-limit(429) → proxy 가 `429 upstream_error` 로 보존 → mock fallback + 재시도 간격 안내
 - 경로 미발견(`code != 0`) → `502 upstream_semantic_error` → 메시지와 함께 안내
 - 네트워크 실패 → `502 upstream_error` → mock fallback
 - 좌표 형식 오류 → `400 bad_request`

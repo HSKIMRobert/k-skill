@@ -118,7 +118,7 @@ curl -fsS --get "${BASE}/v1/naver-map/directions" \
   --data-urlencode 'option=trafast'
 ```
 
-응답에서 `route.trafast[0].summary` 를 읽어 다음으로 매핑한다:
+응답에서 기본 `option=trafast` 기준 `route.trafast[0].summary` 를 읽고, 다른 option을 명시한 경우 `route[option][0].summary` 를 다음으로 매핑한다:
 
 - `distance` (meter) → `distance_km = distance / 1000`
 - `duration` (millisecond) → `duration_minutes = duration / 60000`
@@ -159,6 +159,7 @@ curl -fsS --get "${BASE}/v1/naver-map/geocode" \
 
 - proxy upstream key 미설정 (`NAVER_MAP_CLIENT_ID/SECRET` 없음) → `503 upstream_not_configured` → mock fallback
 - NCP Maps 인증 실패 (401/403) → proxy가 `503` 으로 변환 → mock fallback
+- NCP Maps quota/rate-limit (`429`) → proxy가 `429 upstream_error` 로 보존 → mock fallback + 재시도 간격 안내
 - 경로 미발견 (`code != 0`) → `502 upstream_semantic_error` → 메시지와 함께 안내
 - 좌표 형식 오류 → `400 bad_request`
 - 네트워크 실패 → `502 upstream_error` → mock fallback

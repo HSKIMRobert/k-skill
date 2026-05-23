@@ -53,7 +53,7 @@ function createNaverMapHttpError(serviceName, responseStatus, bodyText) {
   const error = new Error(`Naver Maps ${serviceName} upstream returned an error.`);
   error.code = "upstream_error";
   const isAuthError = responseStatus === 401 || responseStatus === 403;
-  error.statusCode = isAuthError ? 503 : 502;
+  error.statusCode = isAuthError ? 503 : responseStatus === 429 ? 429 : 502;
   error.upstreamStatusCode = responseStatus;
   if (!isAuthError) {
     error.upstreamBodySnippet = bodyText.slice(0, 200);
@@ -136,8 +136,8 @@ function normalizeNaverMapReverseGeocodeQuery(query) {
   }
 
   const output = trimOrNull(query.output) || "json";
-  if (output !== "json" && output !== "xml") {
-    throw new Error("Provide output as json or xml.");
+  if (output !== "json") {
+    throw new Error("Provide output as json. XML passthrough is not supported by this proxy.");
   }
 
   return { coords, orders, output };
