@@ -210,19 +210,6 @@
 - 도서관 정보나루 도서 소장 도서관 endpoint: https://data4library.kr/api/libSrchByBook
 - 도서관 정보나루 도서관별 도서 소장여부 endpoint: https://data4library.kr/api/bookExist
 
-## startup-support
-
-### 공공데이터포털 (data.go.kr)
-- **기관**: 창업진흥원 (K-Startup)
-- **서비스명**: K-Startup 조회서비스
-- **데이터셋 페이지**: https://www.data.go.kr/data/15125364/openapi.do
-- **Open API base URL**: https://apis.data.go.kr/B552735/kisedKstartupService01
-- **인증**: API 키 필수 (`DATA_GO_KR_API_KEY`, proxy 서버 측 주입)
-- **프록시 매핑**: `k-skill-proxy`의 `/v1/kstartup/business-info`, `/v1/kstartup/announcements`, `/v1/kstartup/contents`, `/v1/kstartup/statistics`가 각각 `getBusinessInformation01`, `getAnnouncementInformation01`, `getContentInformation01`, `getStatisticalInformation01`으로 중계 (`returnType=json` 고정)
-
-### 공식 포털 및 상세 공고 진입점
-- **K-Startup 공식 포털**: https://www.k-startup.go.kr
-- API 응답의 `detl_pg_url` 필드가 사용자 상세 공고 진입점으로 사용됨
 
 ### 지자체/유관기관 참고 사이트 (보조 소스)
 - **서울시 창업플러스**: https://seoulstartup.go.kr
