@@ -86,7 +86,6 @@ npx --yes skills add <owner/repo> \
   --skill olive-young-search \
   --skill korean-cinema-search \
   --skill hola-poke-yeoksam \
-  --skill blue-ribbon-nearby \
   --skill kakao-bar-nearby \
   --skill zipcode-search \
   --skill delivery-tracking \
