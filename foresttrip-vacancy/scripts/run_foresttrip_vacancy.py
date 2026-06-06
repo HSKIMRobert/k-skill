@@ -30,6 +30,7 @@ DEFAULT_CONCURRENCY = 4
 MAX_CONCURRENCY = 5
 DEFAULT_WEEK_RANGE = 1
 CATEGORY_CODES = {"01", "02"}
+RESERVE_ROOM_MARKER = "예비"
 
 
 @dataclass
@@ -159,8 +160,8 @@ def check_dependencies(*, launch_browser: bool = True) -> None:
     if sys.version_info < (3, 9):
         raise SystemExit("python 3.9+ is required")
     try:
-        from playwright.sync_api import Error as PlaywrightError
-        from playwright.sync_api import sync_playwright
+        from playwright.sync_api import Error as PlaywrightError  # type: ignore[reportMissingImports]
+        from playwright.sync_api import sync_playwright  # type: ignore[reportMissingImports]
     except ImportError as exc:
         raise SystemExit(
             "playwright is required. Install with: python3 -m pip install playwright"
@@ -209,8 +210,8 @@ def save_session_cache(path: Path, session: Session) -> None:
 
 def bootstrap_session(*, forest_id: str, forest_pw: str, ttl_sec: int = 600) -> Session:
     try:
-        from playwright.sync_api import Error as PlaywrightError
-        from playwright.sync_api import sync_playwright
+        from playwright.sync_api import Error as PlaywrightError  # type: ignore[reportMissingImports]
+        from playwright.sync_api import sync_playwright  # type: ignore[reportMissingImports]
     except ImportError as exc:
         raise SystemExit(
             "playwright is required. Install with: python3 -m pip install playwright "
@@ -379,7 +380,18 @@ def fetch_one(
 
 
 def is_available(row: dict[str, Any]) -> bool:
-    return row.get("rsrvtAvail") == "Y" and row.get("rsrvtCnt") == 0
+    count_value = row.get("rsrvtCnt")
+    if count_value is None:
+        return False
+    try:
+        reserved_count = int(count_value)
+    except ValueError:
+        return False
+    return row.get("rsrvtAvail") == "Y" and reserved_count == 0
+
+
+def is_reserve_room(row: dict[str, Any]) -> bool:
+    return RESERVE_ROOM_MARKER in (row.get("goodsNm") or "")
 
 
 def normalize_row(row: dict[str, Any], forests: dict[str, str]) -> dict[str, Any]:
@@ -443,10 +455,26 @@ def collect_results(
             for row in data:
                 if not is_available(row):
                     continue
+                if is_reserve_room(row):
+                    continue
+                use_dt = row.get("useDt") or ""
+                if use_dt < today or use_dt > last_day:
+                    continue
                 normalized = normalize_row(row, session.forests)
+                normalized["source_category"] = category
                 if date_filter is not None and normalized["use_dt"] not in date_filter:
                     continue
                 rows.append(normalized)
+
+    seen: set[tuple[str, str, str, str]] = set()
+    deduped: list[dict[str, Any]] = []
+    for row in rows:
+        key = (row["forest_id"], row["use_dt"], row["source_category"], row["name"])
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(row)
+    rows = deduped
 
     grouped: dict[str, dict[str, list[dict[str, Any]]]] = {}
     for row in sorted(rows, key=lambda item: (item["forest"], item["use_dt"], item["name"])):

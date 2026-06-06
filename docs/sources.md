@@ -10,7 +10,6 @@
 - KOSIS Open API endpoint host: https://kosis.kr/openapi/ — 일반 helper 호출은 `k-skill-proxy`의 `/v1/kosis/search`, `/v1/kosis/meta`, `/v1/kosis/data`가 이 host의 `/statisticsSearch.do`, `/statisticsData.do`, `/Param/statisticsParameterData.do` 로 중계한다. `bigdata`/`--direct`는 `/statisticsBigData.do` 등을 직접 호출한다 (HTTPS 전용, 2026-03-05 시행)
 - Kakao Local API endpoint host: https://dapi.kakao.com/v2/local/ — `k-skill-proxy`의 `/v1/kakao-local/geocode`가 `/search/address.json` → empty result 시 `/search/keyword.json` 순서로 중계한다. 같은 host의 `/search/keyword.json`, `/search/category.json`, `/geo/coord2address.json`, `/geo/coord2regioncode.json` 은 `kakao-map` 스킬용 `/v1/kakao-map/*` 라우트가 직접 중계한다.
 - Kakao Mobility Directions endpoint: https://apis-navi.kakaomobility.com/v1/directions — `k-skill-proxy`의 `/v1/kakao-mobility/directions`가 운영자 `KAKAO_REST_API_KEY`를 `Authorization: KakaoAK ...` 헤더로 주입해 자동차 길찾기를 중계한다.
-- NAVER Cloud Platform Maps Console: https://www.ncloud.com/product/applicationService/maps — `k-skill-proxy`의 `/v1/naver-map/directions`, `/v1/naver-map/geocode`, `/v1/naver-map/reverse-geocode`가 각각 `https://maps.apigw.ntruss.com/map-direction/v1/driving`, `/map-geocode/v2/geocode`, `/map-reversegeocode/v2/gc` 로 중계한다. 운영자 `NAVER_MAP_CLIENT_ID`/`NAVER_MAP_CLIENT_SECRET` 가 필요하다.
 - 숲나들e 공식 사이트: https://foresttrip.go.kr/index.jsp
 - 숲나들e 로그인: https://www.foresttrip.go.kr/com/login.do
 - 숲나들e 월별예약조회 화면: https://www.foresttrip.go.kr/rep/or/sssn/monthRsrvtSmplStatus.do
@@ -156,9 +155,6 @@
 - 당근알바 검색 Remix data route: https://www.daangn.com/kr/jobs/?_data=routes/kr.jobs._index
 - 당근중고차 검색 Remix data route: https://www.daangn.com/kr/cars/?_data=routes/kr.cars._index
 - 당근부동산 상세 페이지: https://realty.daangn.com/articles/<id>
-- 블루리본 메인: https://www.bluer.co.kr/
-- 블루리본 지역 검색: https://www.bluer.co.kr/search/zone
-- 블루리본 주변 맛집 JSON: https://www.bluer.co.kr/restaurants/map
 - 카카오맵 모바일 검색: https://m.map.kakao.com/actions/searchView
 - 카카오맵 장소 패널 JSON: https://place-api.map.kakao.com/places/panel3/<confirmId>
 - 조선왕조실록 메인: https://sillok.history.go.kr
@@ -210,6 +206,14 @@
 - 도서관 정보나루 도서 소장 도서관 endpoint: https://data4library.kr/api/libSrchByBook
 - 도서관 정보나루 도서관별 도서 소장여부 endpoint: https://data4library.kr/api/bookExist
 
-- 공공데이터포털 데이터셋(창업진흥원 K-Startup 조회서비스): https://www.data.go.kr/data/15125364/openapi.do
-- K-Startup Open API base URL: https://apis.data.go.kr/B552735/kisedKstartupService01 — `k-skill-proxy`의 `/v1/kstartup/business-info`, `/v1/kstartup/announcements`, `/v1/kstartup/contents`, `/v1/kstartup/statistics` 가 각각 `getBusinessInformation01`, `getAnnouncementInformation01`, `getContentInformation01`, `getStatisticalInformation01` 로 중계한다 (returnType=json 고정, ServiceKey 서버 측 주입)
-- K-Startup 공식 포털: https://www.k-startup.go.kr — 응답의 `detl_pg_url` 가 가리키는 사용자 진입점
+
+### 지자체/유관기관 참고 사이트 (보조 소스)
+- **서울시 창업플러스**: https://seoulstartup.go.kr
+- **경기도 창업진흥원**: https://g-startup.kr
+- **부산시 스타트업 허브**: https://busanstartup.kr
+- **광주창업파크**: https://startup.gwangju.kr
+- **대구창업진흥원**: https://daegu-startup.kr
+- **중소기업진흥공단**: https://smbs.or.kr
+- **기술보증기금**: https://koreatech.or.kr
+- **KOTRA**: https://www.kotra.or.kr
+- **중소벤처기업금융공단**: https://www.sbc.or.kr
