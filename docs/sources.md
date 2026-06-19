@@ -232,3 +232,5 @@
 - 국세청 고액·상습체납자 명단공개(무인증): https://www.nts.go.kr/nts/ad/openInfo/selectList.do
 - 지방행정 인허가데이터 LOCALDATA 파일 다운로드(무인증, CP949 CSV): https://file.localdata.go.kr/file/download/<업종slug>/info?orgCode=<지자체코드>
 - LOCALDATA 본체: https://www.localdata.go.kr
+- 잡코리아 기업 인재검색: https://www.jobkorea.co.kr/corp/person/find — 기업회원 로그인 세션에서 마스킹 이력서/목록을 읽는 브라우저 기반 경로. 유료 열람/마스킹 해제/포지션 제안은 수동 확인 대상.
+- 사람인 기업회원 인재풀 검색: https://www.saramin.co.kr/zf_user/memcom/talent-pool/main/search — 기업회원 로그인 및 첫 기기 2차 인증 후 현재 보이는 마스킹 후보 정보를 읽는 브라우저 기반 경로. 유료 열람/연락처 확인/제안 발송은 수동 확인 대상.
