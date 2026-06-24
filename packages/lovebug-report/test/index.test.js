@@ -204,6 +204,32 @@ test("buildSubmitAnonymousReportRequest mirrors the site's Supabase RPC contract
     p_indoor: false
   })
 })
+test("report submission requires a caller-provided stable device hash", async () => {
+  assert.throws(
+    () => buildSubmitAnonymousReportRequest({
+      guCode: "11070",
+      lng: 127.09,
+      lat: 37.59,
+      accuracyM: 25,
+      level: "많아요",
+      context: "길거리"
+    }),
+    /deviceHash is required/
+  )
+
+  await assert.rejects(
+    () => reportLovebug({
+      guCode: "11070",
+      level: "많아요",
+      context: "길거리",
+      lng: 127.09,
+      lat: 37.59,
+      accuracyM: 25,
+      fetch: async () => jsonResponse(null, { status: 204 })
+    }),
+    /deviceHash is required/
+  )
+})
 
 test("reportLovebug submits anonymous reports and classifies official failure modes", async () => {
   const requests = []

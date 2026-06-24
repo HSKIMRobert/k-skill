@@ -414,7 +414,8 @@ function buildSubmitAnonymousReportRequest(options = {}) {
   if (!Number.isFinite(lng) || !Number.isFinite(lat)) throw new TypeError("lng and lat are required numeric coordinates")
   const accuracyM = options.accuracyM == null || options.accuracyM === "" ? null : Number(options.accuracyM)
   if (accuracyM != null && !Number.isFinite(accuracyM)) throw new TypeError("accuracyM must be numeric when provided")
-  const deviceHash = cleanText(options.deviceHash || options.device_hash || createDeviceHash({ seed: `${guCode}:${lng}:${lat}` }))
+  const deviceHash = cleanText(options.deviceHash || options.device_hash)
+  if (!deviceHash) throw new TypeError("deviceHash is required for report submission")
   const indoor = options.indoor == null ? context === "indoor" : Boolean(parseBoolean(options.indoor, options.indoor))
   const body = {
     p_gu_code: guCode,
