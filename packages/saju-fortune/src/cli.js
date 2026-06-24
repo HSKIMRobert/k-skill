@@ -39,7 +39,88 @@ Options:
   --fortune-type TYPE         general|career|wealth|health|love
   --tool TOOL_NAME            Call an upstream-style tool name such as analyze_saju
   --target-year YEAR          Optional yearly fortune target
+  --date YYYY-MM-DD           Date for convert_calendar
+  --from-calendar solar|lunar Source calendar for convert_calendar
+  --to-calendar solar|lunar   Target calendar for convert_calendar
+  --person1-json JSON         First profile for check_compatibility
+  --person2-json JSON         Second profile for check_compatibility
+  --target-date YYYY-MM-DD    Date for get_daily_fortune
+  --period-type TYPE          Period type for get_fortune_by_period
+  --target VALUE              Period target for get_fortune_by_period
+  --limit NUMBER              Maximum cycles for get_dae_un
+  --preset NAME               Local settings preset for manage_settings
 `);
+}
+
+function getAnalyzeInput(options) {
+  return {
+    name: options.name,
+    hanjaName: options["hanja-name"] || options.hanjaName,
+    birthDate: options["birth-date"] || options.birthDate,
+    birthTime: options["birth-time"] || options.birthTime,
+    calendar: options.calendar,
+    isLeapMonth: Boolean(options["leap-month"] || options.isLeapMonth),
+    gender: options.gender,
+    birthCity: options["birth-city"] || options.birthCity,
+    analysisType: options["analysis-type"] || options.analysisType,
+    fortuneType: options["fortune-type"] || options.fortuneType,
+    targetYear: options["target-year"] || options.targetYear
+  };
+}
+
+function parseJsonOption(options, dashedKey, camelKey) {
+  const value = options[dashedKey] || options[camelKey];
+  if (!value || value === true) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(String(value));
+  } catch (error) {
+    throw new Error(`${dashedKey} must be valid JSON.`);
+  }
+}
+
+function buildToolArgs(toolName, options) {
+  const input = getAnalyzeInput(options);
+
+  switch (toolName) {
+    case "convert_calendar":
+      return {
+        date: options.date || input.birthDate,
+        fromCalendar: options["from-calendar"] || options.fromCalendar || input.calendar,
+        toCalendar: options["to-calendar"] || options.toCalendar,
+        isLeapMonth: input.isLeapMonth
+      };
+    case "check_compatibility":
+      return {
+        person1: parseJsonOption(options, "person1-json", "person1Json"),
+        person2: parseJsonOption(options, "person2-json", "person2Json")
+      };
+    case "get_daily_fortune":
+      return {
+        ...input,
+        targetDate: options["target-date"] || options.targetDate
+      };
+    case "get_dae_un":
+      return {
+        ...input,
+        limit: options.limit
+      };
+    case "get_fortune_by_period":
+      return {
+        ...input,
+        periodType: options["period-type"] || options.periodType,
+        target: options.target
+      };
+    case "manage_settings":
+      return {
+        preset: options.preset
+      };
+    case "analyze_saju":
+    default:
+      return input;
+  }
 }
 
 async function main(argv = process.argv.slice(2)) {
@@ -50,21 +131,9 @@ async function main(argv = process.argv.slice(2)) {
     return 0;
   }
 
-  const input = {
-    name: options.name,
-    hanjaName: options["hanja-name"],
-    birthDate: options["birth-date"] || options.birthDate,
-    birthTime: options["birth-time"] || options.birthTime,
-    calendar: options.calendar,
-    isLeapMonth: Boolean(options["leap-month"]),
-    gender: options.gender,
-    birthCity: options["birth-city"] || options.birthCity,
-    analysisType: options["analysis-type"] || options.analysisType,
-    fortuneType: options["fortune-type"] || options.fortuneType,
-    targetYear: options["target-year"] || options.targetYear
-  };
-
-  const result = options.tool ? callSajuTool(String(options.tool), input) : analyzeSaju(input, input);
+  const toolName = options.tool && String(options.tool);
+  const input = getAnalyzeInput(options);
+  const result = toolName ? callSajuTool(toolName, buildToolArgs(toolName, options)) : analyzeSaju(input, input);
   console.log(JSON.stringify(result, null, 2));
   return 0;
 }
@@ -78,4 +147,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main, parseArgs };
+module.exports = { buildToolArgs, getAnalyzeInput, main, parseArgs };
