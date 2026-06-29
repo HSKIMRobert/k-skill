@@ -205,6 +205,8 @@
 - 우체국 배송조회: https://service.epost.go.kr/trace.RetrieveRegiPrclDeliv.postal?sid1=
 - 우체국 배송상세 HTML: https://service.epost.go.kr/trace.RetrieveDomRigiTraceList.comm
 
+- `namefyi` npm package: https://www.npmjs.com/package/namefyi — MIT, ESM-only TypeScript package used by `naming-house` for Korean romanization, CJK stroke counts, stroke→오행, and 오행 compatibility; repository https://github.com/fyipedia/namefyi-js; homepage https://namefyi.com.
+- `korean-stroke` npm package: https://www.npmjs.com/package/korean-stroke — MIT CommonJS package used by `naming-house` for Hangul stroke fallback when Hanja is unavailable; repository https://github.com/hwahyeon/korean-stroke; depends on `korean-unpacker`.
 - SK렌터카 다이렉트 타고BUY inventory page: https://www.skdirect.co.kr/tb
 - 롯데오토옥션 공개 메인: https://www.lotteautoauction.net/hp/pub/cmm/viewMain.do
 - 레드캡렌터카 business rent portal: https://biz.redcap.co.kr/rent/

@@ -1,0 +1,42 @@
+{
+  "name": "naming-house",
+  "version": "0.1.0",
+  "description": "Deterministic Korean naming recommendation helper for k-skill",
+  "license": "MIT",
+  "main": "src/index.js",
+  "bin": {
+    "naming-house": "src/cli.js"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NomaDamas/k-skill.git"
+  },
+  "keywords": [
+    "k-skill",
+    "korean-name",
+    "naming",
+    "saju",
+    "stroke-count",
+    "성명학",
+    "작명"
+  ],
+  "dependencies": {
+    "korean-stroke": "^1.1.5",
+    "namefyi": "^0.1.2",
+    "saju-fortune": "^0.2.0"
+  },
+  "scripts": {
+    "lint": "node --check src/index.js && node --check src/cli.js && node --check test/index.test.js",
+    "test": "node --test"
+  }
+}

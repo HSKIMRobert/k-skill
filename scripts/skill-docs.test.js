@@ -1533,6 +1533,36 @@ test("donation-place-search docs describe 1365 links as best-effort verification
   }
 });
 
+test("naming-house docs and package preserve the 작명소 contract", () => {
+  const readme = read("README.md");
+  const install = read(path.join("docs", "install.md"));
+  const sources = read(path.join("docs", "sources.md"));
+  const skill = read(path.join("naming-house", "SKILL.md"));
+  const featureDoc = read(path.join("docs", "features", "naming-house.md"));
+  const packageReadme = read(path.join("packages", "naming-house", "README.md"));
+  const packageJson = readJson(path.join("packages", "naming-house", "package.json"));
+
+  assert.match(readme, /\| 작명소 \| `naming-house` \|/);
+  assert.match(readme, /docs\/features\/naming-house\.md/);
+  assert.match(install, /--skill naming-house/);
+  assert.match(install, /npm install -g naming-house/);
+  assert.equal(packageJson.name, "naming-house");
+  assert.equal(packageJson.dependencies.namefyi, "^0.1.2");
+  assert.equal(packageJson.dependencies["korean-stroke"], "^1.1.5");
+  assert.match(sources, /namefyi/);
+  assert.match(sources, /korean-stroke/);
+
+  for (const doc of [skill, featureDoc, packageReadme]) {
+    assert.match(doc, /namefyi/);
+    assert.match(doc, /korean-stroke/);
+    assert.match(doc, /saju-fortune/);
+    assert.match(doc, /음력|lunar/);
+    assert.match(doc, /한자|Hanja/);
+    assert.match(doc, /법적|legal|인명용 한자/);
+    assert.match(doc, /MCP|proxy|로컬 또는 전역 npm package/);
+  }
+});
+
 test("repository docs advertise the kbl-results skill across the documented surfaces", () => {
   const readme = read("README.md");
   const install = read(path.join("docs", "install.md"));
