@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 
 from fake_popbill import install_fake_popbill
@@ -57,15 +60,23 @@ def test_service_coverage_contains_all_popbill_modules():
     assert expected <= set(popbill_cli.SERVICE_CLASSES)
 
 
-def test_config_check_does_not_print_secret_values(monkeypatch=None):
+def test_config_check_does_not_print_secret_values():
     import os
     old = dict(os.environ)
     try:
         os.environ["KSKILL_POPBILL_LINK_ID"] = "LINKSECRET"
         os.environ["KSKILL_POPBILL_SECRET_KEY"] = "SUPERSECRET"
         os.environ["KSKILL_POPBILL_CORP_NUM"] = "1234567890"
-        assert popbill_cli.env_value("link_id") == "LINKSECRET"
-        assert popbill_cli.env_value("secret_key") == "SUPERSECRET"
+        args = popbill_cli.build_parser().parse_args(["config-check"])
+        output = StringIO()
+        with redirect_stdout(output):
+            result = popbill_cli.command_config_check(args)
+        assert result == 0
+        printed = output.getvalue()
+        payload = json.loads(printed)
+        assert payload["ok"] is True
+        assert "LINKSECRET" not in printed
+        assert "SUPERSECRET" not in printed
     finally:
         os.environ.clear()
         os.environ.update(old)

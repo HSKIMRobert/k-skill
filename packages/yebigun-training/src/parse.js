@@ -9,8 +9,7 @@ const {
 } = require("./menus");
 const { parseGenericTable, parseInquiry } = require("./inquiry");
 
-const TAG_PATTERN = /<[^>]+>/g;
-const WHITESPACE_PATTERN = /\s+/g;
+const TAG_PATTERN = /<[^>]+>/g, WHITESPACE_PATTERN = /\s+/g;
 
 function stripTags(value) {
   return String(value || "")
@@ -110,11 +109,6 @@ function extractSection(html, tableId) {
   return match ? match[1] : "";
 }
 
-function extractAttr(tagHtml, attrName) {
-  const match = String(tagHtml || "").match(new RegExp(`${attrName}=["']([^"']*)["']`));
-  return match ? match[1] : null;
-}
-
 function parseDateRange(rawDateText) {
   const [start, end] = String(rawDateText || "")
     .split("~")
@@ -156,7 +150,7 @@ function parseTrainingRow(rowHtml) {
     result: result || null,
     location: location || null,
     remarks: remarks || null,
-    traId: extractAttr(rowHtml, "data-tra-id") || null,
+    traId: String(rowHtml || "").match(/data-tra-id=["']([^"']*)["']/)?.[1] || null,
   };
 }
 
@@ -267,11 +261,6 @@ function parseTrainingInfo(html) {
   return { member, currentDisplayYear, trainings, comparison };
 }
 
-/**
- * Parses any VIEW_MENUS page: a generic headers+rows table, after the usual
- * relogin check. `menu`/`label` are passed through so the caller doesn't need
- * to re-derive which list this came from.
- */
 module.exports = {
   APPLICATION_MENUS,
   VIEW_MENUS,
