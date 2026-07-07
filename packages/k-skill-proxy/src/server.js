@@ -51,6 +51,7 @@ const {
   normalizeKoreanLawSearchQuery,
   proxyKoreanLawRequest
 } = require("./korean-law");
+const { normalizeKrWhoisDomainQuery, proxyKrWhoisDomainRequest } = require("./kr-whois");
 const AIR_KOREA_UPSTREAM_BASE_URL = "http://apis.data.go.kr";
 const DATA_GO_KR_UPSTREAM_BASE_URL = "https://apis.data.go.kr";
 const DATA4LIBRARY_UPSTREAM_BASE_URL = "https://data4library.kr/api";
@@ -1901,6 +1902,7 @@ function buildServer({ env = process.env, provider = null, now = () => new Date(
         naverNewsApiConfigured: naverSearchKeysPresent,
         ntsBusinessConfigured: Boolean(config.molitApiKey),
         kstartupConfigured: Boolean(config.molitApiKey),
+        krWhoisConfigured: Boolean(config.molitApiKey),
         nationalPensionConfigured: Boolean(config.molitApiKey),
         fscCorpConfigured: Boolean(config.molitApiKey),
         g2bSanctionConfigured: Boolean(config.molitApiKey),
@@ -2485,6 +2487,41 @@ function buildServer({ env = process.env, provider = null, now = () => new Date(
     }
 
     return payload;
+  });
+
+  app.get("/v1/kr-whois/domain", async (request, reply) => {
+    let normalized;
+
+    try {
+      normalized = normalizeKrWhoisDomainQuery(request.query || {});
+    } catch (error) {
+      reply.code(400);
+      return {
+        error: "bad_request",
+        message: error.message
+      };
+    }
+
+    const cacheKey = makeCacheKey({ route: "kr-whois-domain", ...normalized });
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      reply.code(cached.statusCode);
+      reply.header("content-type", cached.contentType);
+      return cached.body;
+    }
+
+    const upstream = await proxyKrWhoisDomainRequest({
+      params: normalized,
+      serviceKey: config.molitApiKey
+    });
+
+    if (upstream.statusCode >= 200 && upstream.statusCode < 300) {
+      cache.set(cacheKey, upstream, config.cacheTtlMs);
+    }
+
+    reply.code(upstream.statusCode);
+    reply.header("content-type", upstream.contentType);
+    return upstream.body;
   });
 
   app.get("/v1/han-river/water-level", async (request, reply) => {
@@ -5095,6 +5132,7 @@ module.exports = {
   normalizeKosisMetaQuery,
   normalizeKosisSearchQuery,
   normalizeKstartupQuery,
+  normalizeKrWhoisDomainQuery,
   normalizeKoreanStockLookupQuery,
   normalizeKoreanStockSearchQuery,
   normalizeLhNoticeDetailQuery,
@@ -5121,6 +5159,7 @@ module.exports = {
   proxyNeisSchoolInfoRequest,
   proxyKmaWeatherRequest,
   proxyKosisRequest,
+  proxyKrWhoisDomainRequest,
   proxyKstartupRequest,
   fetchKakaoLocalEndpoint,
   fetchKakaoMobilityDirections,

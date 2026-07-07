@@ -16,6 +16,7 @@ const {
   normalizeKosisMetaQuery,
   normalizeKosisSearchQuery,
   normalizeKstartupQuery,
+  normalizeKrWhoisDomainQuery,
   normalizeNtsBusinessStatusQuery,
   normalizeNtsBusinessValidateQuery,
   proxyAirKoreaRequest,
@@ -78,6 +79,77 @@ test("createMemoryCache refuses to store failure responses", () => {
 
   assert.equal(cache.set("k4", { items: [{ id: 1 }] }, 60000), true);
   assert.deepEqual(cache.get("k4"), { items: [{ id: 1 }] }, "successful payload must be stored");
+});
+
+test("KR WHOIS domain normalizer accepts only .kr and .한국 domains", () => {
+  assert.deepEqual(normalizeKrWhoisDomainQuery({ domain: "https://KISA.or.kr/path" }), {
+    query: "kisa.or.kr",
+    answer: "json"
+  });
+  assert.deepEqual(normalizeKrWhoisDomainQuery({ q: "예시.한국" }), {
+    query: "예시.한국",
+    answer: "json"
+  });
+
+  assert.throws(() => normalizeKrWhoisDomainQuery({}), /domain/);
+  assert.throws(() => normalizeKrWhoisDomainQuery({ domain: "example.com" }), /\.kr/);
+  assert.throws(() => normalizeKrWhoisDomainQuery({ domain: "bad..or.kr" }), /valid domain/);
+});
+
+test("KR WHOIS domain route injects serviceKey server-side and caches success", async (t) => {
+  const originalFetch = global.fetch;
+  const calls = [];
+  global.fetch = async (url) => {
+    calls.push(String(url));
+    return new Response(
+      JSON.stringify({ result_code: "10000", result_msg: "정상 응답 입니다.", name: "kisa.or.kr" }),
+      { status: 200, headers: { "content-type": "application/json;charset=UTF-8" } }
+    );
+  };
+
+  const app = buildServer({ env: { DATA_GO_KR_API_KEY: "data-go-key" } });
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const first = await app.inject({ method: "GET", url: "/v1/kr-whois/domain?domain=kisa.or.kr" });
+  assert.equal(first.statusCode, 200);
+  assert.equal(first.json().name, "kisa.or.kr");
+  assert.match(calls[0], /\/B551505\/whois\/domain_name\?/);
+  assert.match(calls[0], /serviceKey=data-go-key/);
+  assert.match(calls[0], /query=kisa\.or\.kr/);
+  assert.match(calls[0], /answer=json/);
+
+  const second = await app.inject({ method: "GET", url: "/v1/kr-whois/domain?domain=kisa.or.kr" });
+  assert.equal(second.statusCode, 200);
+  assert.equal(calls.length, 1, "second request must be served from cache");
+});
+
+test("KR WHOIS domain route reports missing and rejected upstream key", async (t) => {
+  const app = buildServer({ env: {} });
+  t.after(async () => {
+    await app.close();
+  });
+
+  const missing = await app.inject({ method: "GET", url: "/v1/kr-whois/domain?domain=kisa.or.kr" });
+  assert.equal(missing.statusCode, 503);
+  assert.equal(missing.json().error, "upstream_not_configured");
+
+  const originalFetch = global.fetch;
+  global.fetch = async () => new Response(
+    "<OpenAPI_ServiceResponse><cmmMsgHeader><returnAuthMsg>SERVICE KEY IS NOT REGISTERED ERROR</returnAuthMsg></cmmMsgHeader></OpenAPI_ServiceResponse>",
+    { status: 200, headers: { "content-type": "application/xml" } }
+  );
+  const rejectedApp = buildServer({ env: { DATA_GO_KR_API_KEY: "bad-key" } });
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await rejectedApp.close();
+  });
+
+  const rejected = await rejectedApp.inject({ method: "GET", url: "/v1/kr-whois/domain?domain=kisa.or.kr" });
+  assert.equal(rejected.statusCode, 502);
+  assert.equal(rejected.json().error, "upstream_forbidden");
 });
 
 test("food-safety search does not cache upstream failures so transient errors self-heal", async (t) => {
