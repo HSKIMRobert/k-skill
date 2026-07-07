@@ -57,6 +57,12 @@ const {
   normalizeKoreanLawSearchQuery,
   proxyKoreanLawRequest
 } = require("./korean-law");
+const {
+  normalizeNhisCheckupQuery,
+  normalizeNhisLongTermCareQuery,
+  proxyNhisCheckupRequest,
+  proxyNhisLongTermCareRequest
+} = require("./nhis-care");
 const { normalizeKopisDetailQuery, normalizeKopisListQuery, proxyKopisRequest } = require("./kopis");
 const { normalizeKrWhoisDomainQuery, proxyKrWhoisDomainRequest } = require("./kr-whois");
 const AIR_KOREA_UPSTREAM_BASE_URL = "http://apis.data.go.kr";
@@ -1913,6 +1919,8 @@ function buildServer({ env = process.env, provider = null, now = () => new Date(
         naverNewsApiConfigured: naverSearchKeysPresent,
         ntsBusinessConfigured: Boolean(config.molitApiKey),
         kstartupConfigured: Boolean(config.molitApiKey),
+        nhisCareConfigured: Boolean(config.molitApiKey),
+        nhisCheckupConfigured: Boolean(config.molitApiKey),
         nationalPensionConfigured: Boolean(config.molitApiKey),
         fscCorpConfigured: Boolean(config.molitApiKey),
         g2bSanctionConfigured: Boolean(config.molitApiKey),
@@ -2657,6 +2665,76 @@ function buildServer({ env = process.env, provider = null, now = () => new Date(
     }
 
     const upstream = await proxyKrWhoisDomainRequest({
+      params: normalized,
+      serviceKey: config.molitApiKey
+    });
+
+    if (upstream.statusCode >= 200 && upstream.statusCode < 300) {
+      cache.set(cacheKey, upstream, config.cacheTtlMs);
+    }
+
+    reply.code(upstream.statusCode);
+    reply.header("content-type", upstream.contentType);
+    return upstream.body;
+  });
+
+  app.get("/v1/nhis/long-term-care", async (request, reply) => {
+    let normalized;
+
+    try {
+      normalized = normalizeNhisLongTermCareQuery(request.query || {});
+    } catch (error) {
+      reply.code(400);
+      return {
+        error: "bad_request",
+        message: error.message
+      };
+    }
+
+    const cacheKey = makeCacheKey({ route: "nhis-long-term-care", ...normalized });
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      reply.code(cached.statusCode);
+      reply.header("content-type", cached.contentType);
+      return cached.body;
+    }
+
+    const upstream = await proxyNhisLongTermCareRequest({
+      params: normalized,
+      serviceKey: config.molitApiKey
+    });
+
+    if (upstream.statusCode >= 200 && upstream.statusCode < 300) {
+      cache.set(cacheKey, upstream, config.cacheTtlMs);
+    }
+
+    reply.code(upstream.statusCode);
+    reply.header("content-type", upstream.contentType);
+    return upstream.body;
+  });
+
+  app.get("/v1/nhis/checkup/:operation", async (request, reply) => {
+    let normalized;
+
+    try {
+      normalized = normalizeNhisCheckupQuery(request.params.operation, request.query || {});
+    } catch (error) {
+      reply.code(400);
+      return {
+        error: "bad_request",
+        message: error.message
+      };
+    }
+
+    const cacheKey = makeCacheKey({ route: "nhis-checkup", ...normalized });
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      reply.code(cached.statusCode);
+      reply.header("content-type", cached.contentType);
+      return cached.body;
+    }
+
+    const upstream = await proxyNhisCheckupRequest({
       params: normalized,
       serviceKey: config.molitApiKey
     });
@@ -5284,6 +5362,8 @@ module.exports = {
   normalizeKopisListQuery,
   normalizeKstartupQuery,
   normalizeKrWhoisDomainQuery,
+  normalizeNhisCheckupQuery,
+  normalizeNhisLongTermCareQuery,
   normalizeKoreanStockLookupQuery,
   normalizeKoreanStockSearchQuery,
   normalizeLhNoticeDetailQuery,
@@ -5314,6 +5394,8 @@ module.exports = {
   proxyKopisRequest,
   proxyKrWhoisDomainRequest,
   proxyKstartupRequest,
+  proxyNhisCheckupRequest,
+  proxyNhisLongTermCareRequest,
   fetchKakaoLocalEndpoint,
   fetchKakaoMobilityDirections,
   fetchNaverShoppingSearch,
