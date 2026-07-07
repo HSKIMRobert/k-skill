@@ -6,6 +6,8 @@ const {
   createMemoryCache,
   isFailureResponse,
   makeCacheKey,
+  normalizeAssemblyBillSearchQuery,
+  normalizeAssemblyVoteQuery,
   normalizeData4LibraryBookDetailQuery,
   normalizeData4LibraryBookExistsQuery,
   normalizeData4LibraryBookSearchQuery,
@@ -15,6 +17,7 @@ const {
   normalizeKosisDataQuery,
   normalizeKosisMetaQuery,
   normalizeKosisSearchQuery,
+  normalizeKopisListQuery,
   normalizeKstartupQuery,
   normalizeKrWhoisDomainQuery,
   normalizeNtsBusinessStatusQuery,
@@ -150,6 +153,194 @@ test("KR WHOIS domain route reports missing and rejected upstream key", async (t
   const rejected = await rejectedApp.inject({ method: "GET", url: "/v1/kr-whois/domain?domain=kisa.or.kr" });
   assert.equal(rejected.statusCode, 502);
   assert.equal(rejected.json().error, "upstream_forbidden");
+});
+
+test("Assembly bill and vote normalizers validate required public params", () => {
+  assert.deepEqual(
+    normalizeAssemblyBillSearchQuery({ query: "간호법", page: "2", limit: "20" }),
+    {
+      Type: "json",
+      pIndex: 2,
+      pSize: 20,
+      ERACO: "제21대",
+      BILL_NM: "간호법"
+    }
+  );
+  assert.deepEqual(
+    normalizeAssemblyVoteQuery({ age: "21", billId: "PRC_TEST", memberName: "홍길동", voteResult: "찬성" }),
+    {
+      Type: "json",
+      pIndex: 1,
+      pSize: 10,
+      AGE: "21",
+      BILL_ID: "PRC_TEST",
+      HG_NM: "홍길동",
+      RESULT_VOTE_MOD: "찬성"
+    }
+  );
+  assert.throws(() => normalizeAssemblyVoteQuery({ billId: "PRC_TEST" }), /age/);
+  assert.throws(() => normalizeAssemblyVoteQuery({ age: "제21대", billId: "PRC_TEST" }), /valid age/);
+  assert.throws(() => normalizeAssemblyBillSearchQuery({ limit: "1001" }), /pSize/);
+});
+
+test("Assembly routes inject KEY server-side and cache successful responses", async (t) => {
+  const originalFetch = global.fetch;
+  const calls = [];
+  global.fetch = async (url) => {
+    calls.push(String(url));
+    return new Response(
+      JSON.stringify({ ALLBILLV2: [{ head: [{ list_total_count: 1 }] }, { row: [{ BILL_NM: "간호법" }] }] }),
+      { status: 200, headers: { "content-type": "application/json;charset=UTF-8" } }
+    );
+  };
+
+  const app = buildServer({ env: { ASSEMBLY_API_KEY: "assembly-key" } });
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const first = await app.inject({ method: "GET", url: "/v1/assembly/bills?query=%EA%B0%84%ED%98%B8%EB%B2%95&limit=5" });
+  assert.equal(first.statusCode, 200);
+  assert.equal(first.json().ALLBILLV2[1].row[0].BILL_NM, "간호법");
+  assert.match(calls[0], /\/portal\/openapi\/ALLBILLV2\?/);
+  assert.match(calls[0], /KEY=assembly-key/);
+  assert.match(calls[0], /Type=json/);
+  assert.match(calls[0], /BILL_NM=%EA%B0%84%ED%98%B8%EB%B2%95/);
+  assert.match(calls[0], /pSize=5/);
+
+  const second = await app.inject({ method: "GET", url: "/v1/assembly/bills?query=%EA%B0%84%ED%98%B8%EB%B2%95&limit=5" });
+  assert.equal(second.statusCode, 200);
+  assert.equal(calls.length, 1);
+});
+
+test("Assembly bill detail and votes route to documented operations", async (t) => {
+  const originalFetch = global.fetch;
+  const calls = [];
+  global.fetch = async (url) => {
+    calls.push(String(url));
+    return new Response(JSON.stringify({ RESULT: { CODE: "INFO-000", MESSAGE: "정상 처리되었습니다." } }), {
+      status: 200,
+      headers: { "content-type": "application/json;charset=UTF-8" }
+    });
+  };
+
+  const app = buildServer({ env: { KSKILL_ASSEMBLY_API_KEY: "assembly-key" } });
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  assert.equal((await app.inject({ method: "GET", url: "/v1/assembly/bill-detail?billId=000016" })).statusCode, 200);
+  assert.equal((await app.inject({ method: "GET", url: "/v1/assembly/votes?age=21&billId=PRC_TEST&memberName=%ED%99%8D%EA%B8%B8%EB%8F%99" })).statusCode, 200);
+  assert.match(calls[0], /\/portal\/openapi\/BILLINFODETAIL\?/);
+  assert.match(calls[0], /BILL_ID=000016/);
+  assert.match(calls[1], /\/portal\/openapi\/nojepdqqaweusdfbi\?/);
+  assert.match(calls[1], /AGE=21/);
+  assert.match(calls[1], /HG_NM=%ED%99%8D%EA%B8%B8%EB%8F%99/);
+});
+
+test("Assembly routes report missing API key", async (t) => {
+  const app = buildServer({ env: {} });
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({ method: "GET", url: "/v1/assembly/bills?query=%EA%B0%84%ED%98%B8%EB%B2%95" });
+  assert.equal(response.statusCode, 503);
+  assert.equal(response.json().error, "upstream_not_configured");
+});
+
+test("KOPIS performance list normalizer validates dates and aliases", () => {
+  assert.deepEqual(
+    normalizeKopisListQuery({
+      start: "2026-01-01",
+      end: "2026-01-31",
+      page: "2",
+      limit: "20",
+      genre: "AAAA",
+      areaCode: "11"
+    }, "performances"),
+    {
+      cpage: 2,
+      rows: 20,
+      stdate: "20260101",
+      eddate: "20260131",
+      shcate: "AAAA",
+      signgucode: "11"
+    }
+  );
+  assert.throws(() => normalizeKopisListQuery({ end: "20260131" }, "performances"), /stdate/);
+  assert.throws(() => normalizeKopisListQuery({ start: "20260201", end: "20260131" }, "performances"), /<=/);
+  assert.throws(() => normalizeKopisListQuery({ start: "20260101", end: "20260131", rows: "101" }, "performances"), /rows/);
+});
+
+test("KOPIS routes inject service key and cache list responses", async (t) => {
+  const originalFetch = global.fetch;
+  const calls = [];
+  global.fetch = async (url) => {
+    calls.push(String(url));
+    return new Response("<dbs><db><mt20id>PF1</mt20id><prfnm>햄릿</prfnm></db></dbs>", {
+      status: 200,
+      headers: { "content-type": "application/xml;charset=UTF-8" }
+    });
+  };
+
+  const app = buildServer({ env: { KOPIS_API_KEY: "kopis-key" } });
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  const first = await app.inject({ method: "GET", url: "/v1/kopis/performances?start=20260101&end=20260131&limit=5" });
+  assert.equal(first.statusCode, 200);
+  assert.match(first.body, /햄릿/);
+  assert.match(calls[0], /\/openApi\/restful\/pblprfr\?/);
+  assert.match(calls[0], /service=kopis-key/);
+  assert.match(calls[0], /stdate=20260101/);
+  assert.match(calls[0], /eddate=20260131/);
+  assert.match(calls[0], /rows=5/);
+
+  const second = await app.inject({ method: "GET", url: "/v1/kopis/performances?start=20260101&end=20260131&limit=5" });
+  assert.equal(second.statusCode, 200);
+  assert.equal(calls.length, 1);
+});
+
+test("KOPIS detail and facility routes preserve narrow upstream paths", async (t) => {
+  const originalFetch = global.fetch;
+  const calls = [];
+  global.fetch = async (url) => {
+    calls.push(String(url));
+    return new Response("<dbs><db><id>ok</id></db></dbs>", {
+      status: 200,
+      headers: { "content-type": "application/xml;charset=UTF-8" }
+    });
+  };
+
+  const app = buildServer({ env: { KSKILL_KOPIS_API_KEY: "kopis-key" } });
+  t.after(async () => {
+    global.fetch = originalFetch;
+    await app.close();
+  });
+
+  assert.equal((await app.inject({ method: "GET", url: "/v1/kopis/facilities?q=%EC%84%B8%EC%A2%85&limit=3" })).statusCode, 200);
+  assert.equal((await app.inject({ method: "GET", url: "/v1/kopis/performances/PF132236" })).statusCode, 200);
+  assert.equal((await app.inject({ method: "GET", url: "/v1/kopis/facilities/FC001247" })).statusCode, 200);
+  assert.match(calls[0], /\/openApi\/restful\/prfplc\?/);
+  assert.match(calls[0], /shprfnmfct=%EC%84%B8%EC%A2%85/);
+  assert.match(calls[1], /\/openApi\/restful\/pblprfr\/PF132236\?service=kopis-key/);
+  assert.match(calls[2], /\/openApi\/restful\/prfplc\/FC001247\?service=kopis-key/);
+});
+
+test("KOPIS routes report missing API key", async (t) => {
+  const app = buildServer({ env: {} });
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({ method: "GET", url: "/v1/kopis/performances?start=20260101&end=20260131" });
+  assert.equal(response.statusCode, 503);
+  assert.equal(response.json().error, "upstream_not_configured");
 });
 
 test("food-safety search does not cache upstream failures so transient errors self-heal", async (t) => {
