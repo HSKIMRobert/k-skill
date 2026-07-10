@@ -198,10 +198,10 @@ test("repository publishes Korean contribution guidance for external contributor
   assert.match(contributing, /릴리스나 패키징 관련 변경은 `npm run ci`/);
   assert.match(contributing, /`~\/\.claude\/skills\/<skill-name>`/);
   assert.match(contributing, /`~\/\.agents\/skills\/<skill-name>`/);
-  assert.match(contributing, /production host identity, serving runtime, tunnel\/reverse-proxy details/);
-  assert.match(contributing, /운영자 전용 serving runbook은 repo 밖 private 위치/);
-  assert.doesNotMatch(contributing, new RegExp(["Google", "Cloud", "Run"].join(" ")));
-  assert.doesNotMatch(contributing, new RegExp(["Secret", "Manager"].join(" ")));
+  assert.match(contributing, /Google Cloud Run/);
+  assert.match(contributing, /\.github\/workflows\/deploy-k-skill-proxy\.yml/);
+  assert.match(contributing, /GCP Secret Manager/);
+  assert.match(contributing, /`main`에 머지된 뒤에만 프로덕션에 반영/);
 });
 
 test("README links to the contribution guide", () => {
@@ -657,6 +657,8 @@ test("proxy deployment workflow and docs stay aligned with Cloud Run automation"
   const deployDoc = read(path.join("docs", "deploy-k-skill-proxy.md"));
   const featureDoc = read(path.join("docs", "features", "k-skill-proxy.md"));
   const packageReadme = read(path.join("packages", "k-skill-proxy", "README.md"));
+  const dockerfile = read(path.join("packages", "k-skill-proxy", "Dockerfile"));
+  const proxyPackage = JSON.parse(read(path.join("packages", "k-skill-proxy", "package.json")));
 
   assert.match(workflow, /^name: Deploy k-skill-proxy to Cloud Run$/m);
   assert.match(workflow, /^\s+branches: \[main\]$/m);
@@ -666,6 +668,9 @@ test("proxy deployment workflow and docs stay aligned with Cloud Run automation"
   assert.match(workflow, /ASSEMBLY_API_KEY=ASSEMBLY_API_KEY:latest/);
   assert.match(workflow, /KOPIS_API_KEY=KOPIS_API_KEY:latest/);
   assert.match(workflow, /Smoke test \/health on the new revision/);
+  assert.match(dockerfile, /COPY package\.json package-lock\.json/);
+  assert.match(dockerfile, /npm ci --omit=dev --workspace k-skill-proxy/);
+  assert.equal(proxyPackage.engines.node, ">=20");
 
   for (const doc of [agents, deployDoc, featureDoc, packageReadme]) {
     assert.match(doc, /Cloud Run/i);
