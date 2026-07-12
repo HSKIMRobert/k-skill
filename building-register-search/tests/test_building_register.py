@@ -67,6 +67,30 @@ class BuildingRegisterHelperTests(unittest.TestCase):
         self.assertNotIn("super-secret", stdout.getvalue())
         self.assertIn("REDACTED", stdout.getvalue())
 
+    def test_timeout_is_reported_without_traceback_for_proxy_and_direct(self):
+        stderr = io.StringIO()
+        with mock.patch.object(building_register.urllib.request, "urlopen", side_effect=TimeoutError("timed out")), contextlib.redirect_stderr(stderr):
+            code = building_register.run(["title", "--pnu", "1168010100001230004"])
+        self.assertEqual(code, 1)
+        self.assertIn("시간이 초과", stderr.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue())
+
+        stderr = io.StringIO()
+        with mock.patch.dict(os.environ, {"KSKILL_BUILDING_REGISTER_API_KEY": "key"}, clear=True), mock.patch.object(
+            building_register.urllib.request, "urlopen", side_effect=TimeoutError("timed out")
+        ), contextlib.redirect_stderr(stderr):
+            code = building_register.run(["title", "--pnu", "1168010100001230004", "--direct"])
+        self.assertEqual(code, 1)
+        self.assertIn("시간이 초과", stderr.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue())
+
+    def test_direct_xml_rejects_invalid_pagination_metadata(self):
+        response = mock.MagicMock()
+        response.__enter__.return_value.read.return_value = b"<response><header><resultCode>00</resultCode></header><body><pageNo>many</pageNo><numOfRows>10</numOfRows><totalCount>0</totalCount><items /></body></response>"
+        with mock.patch.object(building_register.urllib.request, "urlopen", return_value=response):
+            with self.assertRaisesRegex(building_register.HelperError, "pageNo"):
+                building_register.http_get_direct_xml("https://example.test", 1)
+
     def test_address_proxy_flow_geocodes_then_calls_building_route(self):
         calls = []
 

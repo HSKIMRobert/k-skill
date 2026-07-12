@@ -176,6 +176,9 @@ def http_get_json(url: str, timeout: int, via_proxy: bool) -> Dict[str, Any]:
         if via_proxy:
             raise HelperError(f"{PROXY_DOWN_MSG} (상세: {error.reason})") from error
         raise HelperError(f"상류 API 네트워크 오류: {error.reason}") from error
+    except TimeoutError as error:
+        target = "프록시 서버" if via_proxy else "상류 API"
+        raise HelperError(f"{target} 요청 시간이 초과되었습니다.") from error
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError as error:
@@ -194,6 +197,8 @@ def http_get_direct_xml(url: str, timeout: int) -> Dict[str, Any]:
         raise HelperError(f"건축물대장 API HTTP 오류: {error.code} {error.reason}") from error
     except urllib.error.URLError as error:
         raise HelperError(f"건축물대장 API 네트워크 오류: {error.reason}") from error
+    except TimeoutError as error:
+        raise HelperError("건축물대장 API 요청 시간이 초과되었습니다.") from error
     try:
         root = ET.fromstring(raw)
     except ET.ParseError as error:
@@ -206,10 +211,18 @@ def http_get_direct_xml(url: str, timeout: int) -> Dict[str, Any]:
     if body is None:
         raise HelperError("건축물대장 API 응답 본문이 없습니다.")
     items = [{child.tag: child.text or "" for child in item} for item in body.findall("./items/item")]
+    pagination = {}
+    for field, default in (("pageNo", 1), ("numOfRows", len(items)), ("totalCount", len(items))):
+        try:
+            pagination[field] = int(body.findtext(field) or default)
+        except ValueError as error:
+            raise HelperError(f"건축물대장 API 응답 {field}가 올바른 정수가 아닙니다.") from error
+        if pagination[field] < 0:
+            raise HelperError(f"건축물대장 API 응답 {field}가 음수입니다.")
     return {
-        "page": int(body.findtext("pageNo") or 1),
-        "page_size": int(body.findtext("numOfRows") or len(items)),
-        "total_count": int(body.findtext("totalCount") or len(items)),
+        "page": pagination["pageNo"],
+        "page_size": pagination["numOfRows"],
+        "total_count": pagination["totalCount"],
         "items": items,
         "source": {"data_go_kr_dataset": "15134735", "operation": "getBrTitleInfo", "response_format": "XML"},
     }
