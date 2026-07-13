@@ -39,6 +39,13 @@ const {
 const { fetchNaverNewsSearch, normalizeNaverNewsSearchQuery } = require("./naver-news");
 const { fetchNaverShoppingSearch, normalizeNaverShoppingSearchQuery } = require("./naver-shopping");
 const {
+  VWORLD_CREDENTIAL_HEADER,
+  isVWorldSuccessBody,
+  normalizeVWorldPriceQuery,
+  normalizeVWorldSearchQuery,
+  proxyVWorldRequest
+} = require("./vworld");
+const {
   normalizeNtsBusinessStatusQuery,
   normalizeNtsBusinessValidateQuery,
   proxyNtsBusinessRequest
@@ -2082,6 +2089,7 @@ function buildServer({ env = process.env, provider = null, now = () => new Date(
         naverShoppingConfigured: true,
         naverSearchApiConfigured: naverSearchKeysPresent,
         naverNewsApiConfigured: naverSearchKeysPresent,
+        vworldRelayAvailable: true,
         ntsBusinessConfigured: Boolean(config.molitApiKey),
         kstartupConfigured: Boolean(config.molitApiKey),
         nhisCareConfigured: Boolean(config.molitApiKey),
@@ -2097,6 +2105,64 @@ function buildServer({ env = process.env, provider = null, now = () => new Date(
       timestamp: new Date().toISOString()
     };
   });
+
+  async function handleVWorldRoute({ operation, normalize, cacheRoute, request, reply }) {
+    let normalized;
+    try {
+      normalized = normalize(request.query || {});
+    } catch (error) {
+      reply.code(400);
+      return {
+        error: "bad_request",
+        message: error.message
+      };
+    }
+
+    const apiKey = trimOrNull(request.headers[VWORLD_CREDENTIAL_HEADER]);
+    if (!apiKey) {
+      reply.code(503);
+      return {
+        error: "upstream_not_configured",
+        message: `Provide the VWorld credential in the ${VWORLD_CREDENTIAL_HEADER} header.`
+      };
+    }
+
+    const cacheKey = makeCacheKey({ route: cacheRoute, ...normalized });
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      reply.code(cached.statusCode);
+      reply.header("content-type", cached.contentType);
+      return cached.body;
+    }
+
+    const upstream = await proxyVWorldRequest({ operation, params: normalized, apiKey });
+    if (
+      upstream.statusCode >= 200 &&
+      upstream.statusCode < 300 &&
+      isVWorldSuccessBody(operation, upstream.body)
+    ) {
+      cache.set(cacheKey, upstream, config.cacheTtlMs);
+    }
+    reply.code(upstream.statusCode);
+    reply.header("content-type", upstream.contentType);
+    return upstream.body;
+  }
+
+  app.get("/v1/vworld/search", async (request, reply) => handleVWorldRoute({
+    operation: "search",
+    normalize: normalizeVWorldSearchQuery,
+    cacheRoute: "vworld-search",
+    request,
+    reply
+  }));
+
+  app.get("/v1/vworld/apartment-prices", async (request, reply) => handleVWorldRoute({
+    operation: "prices",
+    normalize: normalizeVWorldPriceQuery,
+    cacheRoute: "vworld-apartment-prices",
+    request,
+    reply
+  }));
 
   app.get("/B552584/:service/:operation", async (request, reply) => {
     const { service, operation } = request.params;
@@ -5671,6 +5737,8 @@ module.exports = {
   normalizeSeoulBikePageQuery,
   normalizeSeoulCityDataQuery,
   normalizeSeoulSubwayQuery,
+  normalizeVWorldPriceQuery,
+  normalizeVWorldSearchQuery,
   proxyAirKoreaRequest,
   proxyAssemblyRequest,
   proxyData4LibraryRequest,
@@ -5694,6 +5762,7 @@ module.exports = {
   proxySeoulBikeStationsRequest,
   proxySeoulCityDataRequest,
   proxySeoulSubwayRequest,
+  proxyVWorldRequest,
   resolveLatestKmaForecastBase,
   startServer
 };
