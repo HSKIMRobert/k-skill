@@ -172,6 +172,28 @@ test("response projection never truncates an invalid price identity into a valid
   assert.equal(record.stdrYear, "2026-extra");
 });
 
+test("response projection never truncates invalid pagination into the requested page", () => {
+  const body = projectVWorldBody(
+    "prices",
+    JSON.stringify({
+      apartHousingPrices: {
+        resultCode: "",
+        resultMsg: "",
+        totalCount: "1",
+        pageNo: `${"0".repeat(31)}19`,
+        numOfRows: `${"0".repeat(28)}10009`,
+        field: []
+      }
+    }),
+    "synthetic-secret"
+  );
+
+  assert.equal(
+    isVWorldSuccessBody("prices", body, { pageNo: 1, numOfRows: 1000 }),
+    false
+  );
+});
+
 test("rejects redirected VWorld responses even when a custom fetch ignores redirect:error", async () => {
   await assert.rejects(
     proxyVWorldRequest({

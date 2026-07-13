@@ -220,6 +220,16 @@ function projectString(value, apiKey, maxLength) {
   return [...redactCredential(value, apiKey)].slice(0, maxLength).join("");
 }
 
+function projectUntruncatedString(value, apiKey) {
+  if (typeof value !== "string") {
+    return "";
+  }
+  if (containsCredentialEncoding(value, apiKey)) {
+    return "[REDACTED]";
+  }
+  return redactCredential(value, apiKey);
+}
+
 function projectCode(value, fallback, { allowEmpty = false } = {}) {
   if (typeof value !== "string") {
     return fallback;
@@ -261,7 +271,7 @@ function projectVWorldBody(operation, body, apiKey) {
       throw error;
     }
     const items = response.result.items.slice(0, MAX_SEARCH_SIZE).map((item) => ({
-      id: projectString(item?.id, apiKey, 64),
+      id: projectUntruncatedString(item?.id, apiKey),
       title: projectString(item?.title, apiKey, 300),
       address: {
         parcel: projectString(item?.address?.parcel, apiKey, 300),
@@ -289,23 +299,23 @@ function projectVWorldBody(operation, body, apiKey) {
       throw error;
     }
     const field = prices.field.slice(0, MAX_PRICE_ROWS).map((record) => ({
-      pnu: projectString(record?.pnu, apiKey, 64),
-      stdrYear: projectString(record?.stdrYear, apiKey, 16),
+      pnu: projectUntruncatedString(record?.pnu, apiKey),
+      stdrYear: projectUntruncatedString(record?.stdrYear, apiKey),
       aphusNm: projectString(record?.aphusNm, apiKey, 300),
-      dongNm: projectString(record?.dongNm, apiKey, 100),
-      hoNm: projectString(record?.hoNm, apiKey, 100),
-      floorNm: projectString(record?.floorNm, apiKey, 100),
-      prvuseAr: projectString(record?.prvuseAr, apiKey, 100),
-      pblntfPc: projectString(record?.pblntfPc, apiKey, 100),
+      dongNm: projectUntruncatedString(record?.dongNm, apiKey),
+      hoNm: projectUntruncatedString(record?.hoNm, apiKey),
+      floorNm: projectUntruncatedString(record?.floorNm, apiKey),
+      prvuseAr: projectUntruncatedString(record?.prvuseAr, apiKey),
+      pblntfPc: projectUntruncatedString(record?.pblntfPc, apiKey),
       lastUpdtDt: projectString(record?.lastUpdtDt, apiKey, 100)
     }));
     return JSON.stringify({
       apartHousingPrices: {
         resultCode: "",
         resultMsg: "",
-        totalCount: projectString(prices?.totalCount, apiKey, 32),
-        pageNo: projectString(prices?.pageNo, apiKey, 32),
-        numOfRows: projectString(prices?.numOfRows, apiKey, 32),
+        totalCount: projectUntruncatedString(prices?.totalCount, apiKey),
+        pageNo: projectUntruncatedString(prices?.pageNo, apiKey),
+        numOfRows: projectUntruncatedString(prices?.numOfRows, apiKey),
         field
       }
     });
