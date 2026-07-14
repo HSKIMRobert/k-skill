@@ -25,7 +25,7 @@ metadata:
 
 ## Scope
 
-지원 provider 10개(2026-07-14 live 검증):
+지원 provider 9개(2026-07-14 live 검증):
 
 | id | 기관 | 표면 | list | 첨부 원문 |
 |---|---|---|---|---|
@@ -38,7 +38,6 @@ metadata:
 | `gyeongbuk_council` | 경상북도의회 | 공지 중 출장계획 공개 | yes | hwp/pdf |
 | `mpm` | 인사혁신처 | 공무국외출장 제도 안내 | no | policy |
 | `mois` | 행정안전부 | 위법 출장 처리기준 예규 | no | policy file |
-| `btis` | BTIS | 국외출장연수정보시스템 | no | login wall |
 
 표에 없는 기관은 `unsupported institution`으로 보고하고, `open_portal` 키워드 검색 또는 정보공개청구 경로만 안내한다. 추측으로 새 도메인을 크롤하지 않는다.
 
@@ -56,8 +55,9 @@ python3 gov-overseas-trip-report/scripts/gov_overseas_trip_report.py list --prov
 python3 gov-overseas-trip-report/scripts/gov_overseas_trip_report.py list --provider gyeonggi_council
 python3 gov-overseas-trip-report/scripts/gov_overseas_trip_report.py list --provider gyeongbuk_council --keyword 국외출장
 python3 gov-overseas-trip-report/scripts/gov_overseas_trip_report.py detail --provider nec --id 303199
-python3 gov-overseas-trip-report/scripts/gov_overseas_trip_report.py detail --provider btis
 python3 gov-overseas-trip-report/scripts/gov_overseas_trip_report.py search --keyword 몰디브 --providers nec,acrc,open_portal,daejeon_council
+python3 gov-overseas-trip-report/scripts/gov_overseas_trip_report.py discover --keyword 국외출장
+python3 gov-overseas-trip-report/scripts/gov_overseas_trip_report.py discover --keyword 공무국외출장 --urls https://www.ptcouncil.go.kr/,https://council.chungnam.go.kr/
 ```
 
 ## Official access path
@@ -89,10 +89,42 @@ python3 gov-overseas-trip-report/scripts/gov_overseas_trip_report.py search --ke
 - 경기: `https://www.ggc.go.kr/site/main/board/training_resrep/list`
 - 경북: `https://council.gb.go.kr/kr/bbs?bbs_id=notice` 제목에 `출장` 포함 글만
 
-### mpm / mois / btis
+### mpm / mois
 
-- 인사혁신처 제도 안내, 행안부 처리기준 예규, BTIS 로그인 벽 probe만 수행.
-- BTIS는 공개 bulk list 가 아니며 `login_required` 로 보고한다.
+- 인사혁신처 제도 안내, 행안부 처리기준 예규만 제공한다.
+- 로그인/SSO/인증서 벽이 있는 시스템(BTIS 등)은 범위 밖이며 우회하지 않는다.
+
+
+
+
+## Live sample shapes (public only)
+
+에이전트는 대략 이런 제목/필드가 나온다고 기대하면 된다. (2026-07-14/15 live)
+
+- `acrc` 목록: `2026 유엔반부패협약 일본 2주기 점검 관련 국가방문회의 참석`, `세계옴부즈만협회(IOI)...`, `OECD 글로벌반부패청렴포럼...` 등. 상세에 HWPX 계획/결과 첨부.
+- `daegu_council` 목록: `2025년도 교육위원회 공무국외출장 결과보고서`, `기획행정위원회...`, `일본 히로시마...`, `몽골 울란바토르...`. 상세 본문에 출장기간/국가, PDF 첨부.
+- `daejeon_council` 목록: `2025년 ... 일본/베트남/시애틀·밴쿠버/몽골 결과보고서`, 심사위 회의록. 상세 `flSn` 파일 다운로드.
+- `gyeonggi_council`: 국외훈련결과보고서 보드(예: 지방의회 조직 구성 연구). 첨부 uuid 다운로드.
+- `gyeongbuk_council`: 공지성 `공무국외출장 계획서 공개 및 의견수렴` 글 + 계획서 첨부.
+- `open_portal`: 교육청/지자체 문서 메타 다수(제목·기관·일자). 원문 deep-link는 제한적일 수 있음.
+- `nec`: 전체 62건 전수 보고서 + PDF.
+
+## Active expansion playbook
+
+표에 없는 기관이라도 **공개 표면**이면 아래 순서로 능동 탐색한다. 로그인 벽이면 즉시 제외.
+
+1. `discover --keyword "<기관명|국외출장|공무국외출장>"` 실행
+2. `open_portal` histogram의 `PROC_INSTT_NM` 으로 실제 보유 기관을 본다
+3. 해당 기관 공식 도메인(`*.go.kr`)에서 메뉴/검색어: `공무국외출장`, `출장결과`, `국외연수`, `사전정보공표`, `정보공개`
+4. 후보 URL을 `--urls` 로 재probe → `public_board_candidate` 만 채택
+5. 채택 시 recipe 기록: list URL, pagination 파라미터(GET/POST 실측), detail selector, attachment pattern, HTML entity 여부
+6. helper에 provider를 추가하거나, 임시로는 allowlisted URL detail + kordoc 경로로 단건 처리
+7. CAPTCHA/SSO/공동인증서/결제/비공개 페이지는 `login_walled` 로 보고하고 중단
+
+금지:
+- 로그인 우회, 세션 탈취, 비밀번호 입력 자동화
+- 사용자 임의 외부 URL 무검증 fetch
+- 검색 결과만으로 부정/낭비 단정
 
 ## Inputs
 

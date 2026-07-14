@@ -1,12 +1,12 @@
 # 공무국외출장 보고서 조회 가이드
 
-`gov-overseas-trip-report`는 선관위 보드를 고해상도 축으로 두고, 권익위·정보공개포털·대구/대전/경기/경북 의회·인사혁신처/행안부 제도 안내·BTIS 상태 probe까지 검증된 공개 표면 10개를 묶는 스킬이다. 목록/상세/첨부 URL을 수집하고 PDF/HWP/HWPX는 kordoc으로 사실·공개성·검토 신호만 구조화한다. 부정부패 탐지 도구가 아니다.
+`gov-overseas-trip-report`는 선관위 보드를 고해상도 축으로 두고, 권익위·정보공개포털·대구/대전/경기/경북 의회·인사혁신처/행안부 제도 안내·BTIS 상태 probe까지 검증된 공개 표면 9개를 묶는 스킬이다. 목록/상세/첨부 URL을 수집하고 PDF/HWP/HWPX는 kordoc으로 사실·공개성·검토 신호만 구조화한다. 부정부패 탐지 도구가 아니다.
 
 > 참고용 요약입니다. 문서에 없는 정보는 추정하지 않으며, 중요한 판단은 반드시 공식 원문을 직접 확인해야 합니다.
 
 ## 목적
 
-공무국외출장 자료는 기관별 게시판·사전정보공개·정보공개포털에 흩어져 있다. 이 스킬은 live 검증된 10개 공개 표면만 허용하고, helper CLI로 목록/상세를 모은 뒤 원문 근거가 있는 범위만 요약한다.
+공무국외출장 자료는 기관별 게시판·사전정보공개·정보공개포털에 흩어져 있다. 이 스킬은 live 검증된 9개 공개 표면만 허용하고, helper CLI로 목록/상세를 모은 뒤 원문 근거가 있는 범위만 요약한다.
 
 ## 사용 상황
 
@@ -25,7 +25,10 @@
 
 ```bash
 python3 gov-overseas-trip-report/scripts/gov_overseas_trip_report.py list --provider nec --max-pages 5
+python3 gov-overseas-trip-report/scripts/gov_overseas_trip_report.py list --provider acrc
+python3 gov-overseas-trip-report/scripts/gov_overseas_trip_report.py list --provider daegu_council
 python3 gov-overseas-trip-report/scripts/gov_overseas_trip_report.py search --keyword 몰디브
+python3 gov-overseas-trip-report/scripts/gov_overseas_trip_report.py discover --keyword 공무국외출장
 ```
 
 표에 없는 기관은 unsupported. open_portal 메타검색만 보조로 제안한다.
@@ -174,14 +177,13 @@ python3 gov-overseas-trip-report/scripts/gov_overseas_trip_report.py search --ke
 }
 ```
 
-## 1차 스코프 (10 providers)
+## 1차 스코프 (9 providers)
 
 - `nec` GET `pageIndex` 목록/상세/PDF — **POST pageIndex 금지**
 - `acrc` nPage 목록 + boardDownload 첨부
 - `open_portal` mustKeyword JSON 메타
 - `daegu_council` / `daejeon_council` / `gyeonggi_council` / `gyeongbuk_council` 의회 공개 보드
 - `mpm` / `mois` 제도·처리기준 안내
-- `btis` login wall probe only
 - 첨부 원문: kordoc 추출 + 공개성 4층 요약
 - HTTP timeout 시 Aside/`k-skill-browser-runtime` fallback (nec 등)
 
@@ -196,7 +198,7 @@ python3 gov-overseas-trip-report/scripts/gov_overseas_trip_report.py search --ke
 - 제공 형식: 서버 렌더 HTML 게시글 + 첨부 PDF/HWP/HWPX 등
 - 접근 방식: read-only 직접 조회
 
-2026-07-14 live: nec GET pageIndex 1..5 = 62 unique / attachments 62 PDF; acrc list 20; open_portal keyword hits; daegu·daejeon·ggc·gyeongbuk boards parseable; btis login_required; POST pageIndex on nec returns error page. kordoc on nec `bcIdx=303199` and Maldives samples remains valid.
+2026-07-14 live: nec GET pageIndex 1..5 = 62 unique / attachments 62 PDF; acrc list 20; open_portal keyword hits; daegu·daejeon·ggc·gyeongbuk boards parseable; POST pageIndex on nec returns error page. kordoc on nec `bcIdx=303199` and Maldives samples remains valid.
 
 ## 사용 절차
 
@@ -246,13 +248,13 @@ npx kordoc /tmp/report.pdf --format json
 
 - `facts`: 제목, 게시일, 기관, 국가, 기간, 목적, 첨부 URL처럼 원문에서 직접 확인되는 사실
 - `arithmetic`: 출장일수, 공식 일정일수, 1인당 비용, 공개 게시일 기준 등록 지연일수처럼 원문 날짜와 숫자로만 계산되는 값
-- `disclosure`: 핵심 공개항목 10개 중 어떤 항목이 기재되어 있고 어떤 항목이 공개 문서에서 확인되지 않는지
+- `disclosure`: 핵심 공개항목 9개 중 어떤 항목이 기재되어 있고 어떤 항목이 공개 문서에서 확인되지 않는지
 - `reviewSignals`: 원문 인용이 있는 검토 신호만 `matched`로 표시하고, 원문 인용이 없으면 `matched`로 세지 않음
 - `recommendedDisclosureRequests`: 공개 문서에서 확인되지 않는 핵심 자료를 정보공개청구 후보 문서로 변환
 
 `disclosure.disclosureLevel`은 누락된 핵심 공개항목 개수만으로 산정한다. 0~1개 누락은 `충분 공개`, 2~5개 누락은 `일부 미공개`, 6개 이상 누락 또는 첨부 추출 실패는 `대부분 미공개`로 표시한다. 이 값은 낭비 여부가 아니라 공개 문서의 충실도 표시다.
 
-핵심 공개항목은 `목적`, `기간`, `출장국·방문기관`, `출장자`, `주요일정`, `예산·집행액`, `산출내역`, `출장자별 역할`, `결과 활용계획`, `사전심사·사후심의 자료` 10개다. 미기재 항목은 `disclosure.unstated`에 `field`, `checkedScope`, `basis`로 기록하며 검토 신호 개수에 포함하지 않는다.
+핵심 공개항목은 `목적`, `기간`, `출장국·방문기관`, `출장자`, `주요일정`, `예산·집행액`, `산출내역`, `출장자별 역할`, `결과 활용계획`, `사전심사·사후심의 자료` 9개다. 미기재 항목은 `disclosure.unstated`에 `field`, `checkedScope`, `basis`로 기록하며 검토 신호 개수에 포함하지 않는다.
 
 `reviewSignals.matched`는 원문 인용, 위치, 근거가 모두 있을 때만 허용한다. 기본 확인 대상은 고비용 좌석 표현, 관광·사적 일정 표현, 외부부담·이해관계 표현, 취소수수료·위약금 표현, 계획 대비 변경 표현, 설명 없는 대규모 인원 표현이다. 확인한 기본 패턴 6개는 각각 `matched`, `cleared`, `contextFlags`, `notAssessable` 중 하나의 상태를 가져야 한다. 휴양지, 해변, 리조트 같은 단어가 국가 개황이나 선거운동 맥락 설명에만 나오면 `matched`가 아니라 `contextFlags`로 분리한다.
 
@@ -338,3 +340,20 @@ npx kordoc /tmp/report.pdf --format json
 - 전체 게시판 정규화 스캔을 통한 반복 목적·반복 지역 후보 탐지
 - 외부 감사자료와 증빙 자료 대조를 통한 별도 확장
 - 관계망 분석, 대가성 판단, 법적 감사 판단은 별도 이슈에서 안전성 논의 후 추진
+
+
+## 실제 공개 데이터 예시
+
+- 권익위: 유엔반부패협약 일본 점검 방문, IOI 회의, OECD 반부패 포럼 등 출장 **현황/계획 HWPX**
+- 대구시의회: 상임위별 결과보고서, 히로시마/몽골 등 제목, 상세 PDF와 기간·국가 본문
+- 대전시의회: 일본/베트남/미주/몽골 계획·결과·심사위 회의록 + 파일 첨부
+- 경기도의회: 국외훈련결과보고서 보드
+- 경북도의회: 출장계획 사전공개 공지
+- 정보공개포털: 다수 교육청·지자체 문서 메타
+
+## 능동 확장 (표 밖 기관)
+
+1. `discover --keyword` 로 open_portal + seed board probe
+2. 기관 공식 사이트에서 출장/정보공개 메뉴 탐색
+3. 공개 HTML만 채택, login/SSO는 제외
+4. pagination/detail/attachment 패턴을 실측 후 provider recipe 추가

@@ -25,7 +25,7 @@
 - 대전광역시의회 공무국외출장: https://council.daejeon.go.kr/svc/inf/TrainingReportList.do — `TrainingReportView.do?bbsSn=` 상세, 첨부 `/bbs/FileDownLoadProc.do?flSn=`. 2026-07-14 PDF 응답 확인.
 - 경기도의회 국외훈련결과보고서: https://www.ggc.go.kr/site/main/board/training_resrep/list — 상세 `/site/main/board/training_resrep/<id>`, 첨부 `/site/main/file/download/uu/<id>`.
 - 경상북도의회 공지(출장계획 공개): https://council.gb.go.kr/kr/bbs?bbs_id=notice — 제목 키워드 `출장` 필터. 계획서 hwp/pdf 첨부.
-- 국외출장연수정보시스템(BTIS): https://btis.mpm.go.kr/ — 전 부처 등록 시스템이지만 공개 unauth bulk list/API 없음. 2026-07-14 probe 결과 login wall.
+- 국외출장연수정보시스템(BTIS): https://btis.mpm.go.kr/ — 공개 unauth bulk list/API 없음(login wall). **스킬 provider에서 제외**. 제도 배경은 인사혁신처 안내 페이지만 사용.
 - 인사혁신처 공무국외출장 안내: https://www.mpm.go.kr/mpm/info/infoService/BizService08/ — 심사기준으로 출장의 필요성, 방문국과 방문기관의 타당성, 출장자의 적합성, 출장시기의 적시성, 출장경비의 적정성을 제시한다. 보고서는 귀국 후 30일 이내 제출하고, 소속장관은 제출받은 날부터 15일 이내 국외출장연수정보시스템에 등록해야 한다고 안내한다.
 - 공무원 여비 규정: https://www.law.go.kr/lsInfoP.do?lsiSeq=282471 — 국외 항공운임은 제12조 및 별표 3 기준을 참고한다. 고비용 좌석 검토 신호는 최종 위법·낭비 판정이 아니라 원문과 공식 기준 대조가 필요한 항목을 표시하는 용도로만 사용한다.
 - 공무원 여비 규정 별표 3 국외 항공운임 지급 기준표: https://www.law.go.kr/LSW/flDownload.do?bylClsCd=110201&flSeq=160162321&gubun= — 별표 1 제1호 공무원은 실비(1등석), 별표 1 제2호 공무원은 실비(2등석) 기준으로 안내된다.

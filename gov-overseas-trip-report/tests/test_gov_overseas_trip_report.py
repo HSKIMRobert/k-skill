@@ -36,9 +36,9 @@ class FakeResponse:
 
 
 class GovTripHelperTests(unittest.TestCase):
-    def test_providers_include_ten_verified_surfaces(self):
+    def test_providers_include_nine_verified_surfaces(self):
         payload = mod.providers_payload()
-        self.assertEqual(payload["count"], 10)
+        self.assertEqual(payload["count"], 9)
         ids = {p["id"] for p in payload["providers"]}
         self.assertEqual(
             ids,
@@ -52,7 +52,6 @@ class GovTripHelperTests(unittest.TestCase):
                 "daejeon_council",
                 "gyeonggi_council",
                 "gyeongbuk_council",
-                "btis",
             },
         )
 
@@ -185,7 +184,7 @@ class GovTripHelperTests(unittest.TestCase):
             sys.stdout = old
         self.assertEqual(code, 0)
         data = json.loads(buf.getvalue())
-        self.assertEqual(data["count"], 10)
+        self.assertEqual(data["count"], 9)
 
 
 if __name__ == "__main__":

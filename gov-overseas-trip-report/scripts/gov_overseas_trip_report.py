@@ -74,7 +74,7 @@ PROVIDERS: dict[str, Provider] = {
         list_url="https://www.mpm.go.kr/mpm/info/infoService/BizService08/",
         supports_list=False,
         supports_detail=True,
-        notes="개별 출장보고서 DB가 아니라 제도 안내. BTIS 데이터 조회는 로그인 필요.",
+        notes="개별 출장보고서 DB가 아니라 제도 안내. 로그인 필요 시스템(BTIS 등)은 스킬 범위에서 제외.",
     ),
     "mois": Provider(
         id="mois",
@@ -138,16 +138,6 @@ PROVIDERS: dict[str, Provider] = {
         supports_list=True,
         supports_detail=True,
         notes="전용 overseas 보드가 아니라 공지 키워드 필터.",
-    ),
-    "btis": Provider(
-        id="btis",
-        name="국외출장연수정보시스템(BTIS)",
-        kind="login_walled",
-        description="인사혁신처 BTIS 포털. 개별 보고서 공개 조회는 로그인 벽.",
-        list_url="https://btis.mpm.go.kr/",
-        supports_list=False,
-        supports_detail=False,
-        notes="공개 목록 API 없음. 탐침 후 login_required 보고.",
     ),
 }
 
@@ -513,23 +503,54 @@ def detail_daegu(client: Client, args: dict[str, Any]) -> dict[str, Any]:
     if not detail_url.startswith("https://council.daegu.go.kr/"):
         raise FetchError("invalid_input", "daegu detail requires official council.daegu.go.kr URL or --id uid")
     html, final = client.fetch_text(detail_url)
-    title_m = re.search(r"<title[^>]*>([^<]+)</title>", html)
     attachments: list[dict[str, str]] = []
-    for m in re.finditer(r'href="([^"]+)"', html):
-        href = unescape(m.group(1))
+    for m in re.finditer(r"href\s*=\s*(['\"])([^'\"]+)\1", html, re.I):
+        href = unescape(m.group(2))
         if re.search(r"/attach/bbs/overseas/|/kr/bbs/download", href):
             url = absolute("https://council.daegu.go.kr/", href)
+            # filename from surrounding title attr if download link
             typ = "pdf" if url.lower().endswith(".pdf") else "unknown"
-            attachments.append({"title": url.rsplit("/", 1)[-1], "url": url, "type": typ})
-    # unique
+            title = url.rsplit("/", 1)[-1]
+            # look back small window for title=
+            start = max(0, m.start() - 200)
+            window = html[start:m.end()+50]
+            tm = re.search(r"title\s*=\s*(['\"])(.*?)\1", window, re.I | re.S)
+            if tm:
+                title = clean_text(tm.group(2)).replace(" 파일 내려받기", "")
+                if title.lower().endswith(".pdf"):
+                    typ = "pdf"
+            attachments.append({"title": title, "url": url, "type": typ})
     uniq = {a["url"]: a for a in attachments}
+    # Prefer direct pdf attach URL first
+    ordered = sorted(uniq.values(), key=lambda a: 0 if a["url"].endswith(".pdf") else 1)
+    # extract simple body facts if present
+    period = re.search(r"출장기간\s*:\s*([^<\n]+)", html)
+    country = re.search(r"출장국가\s*:\s*([^<\n]+)", html)
+    title_m = re.search(r"<title[^>]*>([^<]+)</title>", html)
+    report_title = None
+    # attachment human filenames often encode the report title
+    for att in ordered:
+        name = att.get("title") or ""
+        if "결과보고서" in name or "출장" in name:
+            report_title = re.sub(r"^[★*\s]+", "", name)
+            report_title = report_title.replace(".pdf", "").replace(".hwp", "").replace(".hwpx", "").strip()
+            break
+    if not report_title:
+        tm = re.search(r"title\s*=\s*(['\"])([^'\"]*(?:결과보고서|공무국외)[^'\"]*)\1", html, re.I)
+        if tm:
+            report_title = clean_text(tm.group(2)).replace(" 파일 내려받기", "").replace(" 내용보기", "")
+    if not report_title and title_m:
+        report_title = clean_text(title_m.group(1))
+        report_title = report_title.split(">")[-1].strip()
     return {
         "provider": "daegu_council",
         "source": PROVIDERS["daegu_council"].name,
         "facts": {
-            "title": clean_text(title_m.group(1)) if title_m else None,
+            "title": report_title,
             "detailUrl": final,
-            "attachments": list(uniq.values()),
+            "period": clean_text(period.group(1)) if period else None,
+            "country": clean_text(country.group(1)) if country else None,
+            "attachments": ordered,
         },
     }
 
@@ -768,23 +789,6 @@ def detail_mois(client: Client, args: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def probe_btis(client: Client, args: dict[str, Any]) -> dict[str, Any]:
-    html, final = client.fetch_text(PROVIDERS["btis"].list_url)
-    loginish = bool(re.search(r"로그인|login|SSO|인증", html, re.I))
-    return {
-        "provider": "btis",
-        "source": PROVIDERS["btis"].name,
-        "sourceUrl": final,
-        "status": "login_required" if loginish or len(html) < 2000 else "unknown",
-        "bytes": len(html),
-        "notes": [
-            "BTIS is the whole-of-government overseas business-trip registry front.",
-            "Public unauthenticated bulk report list/API was not available in live probes.",
-            "Use agency boards or open.go.kr metadata search instead of automated BTIS scraping.",
-        ],
-        "failureMode": "login_required",
-    }
-
 
 def providers_payload() -> dict[str, Any]:
     return {
@@ -823,8 +827,196 @@ DETAIL_HANDLERS: dict[str, ProviderFn] = {
     "gyeongbuk_council": detail_gyeongbuk,
     "mpm": detail_mpm,
     "mois": detail_mois,
-    "btis": probe_btis,
 }
+
+
+
+DISCOVERY_SEEDS = [
+    # Federated metadata (always try first for unknown agency keywords)
+    {
+        "id": "open_portal",
+        "name": "정보공개포털",
+        "kind": "federated_search",
+        "list_url": "https://www.open.go.kr/othicInfo/infoList/infoList.do",
+        "notes": "mustKeyword JSON 메타. 원문 파일 URL은 제한적일 수 있음.",
+    },
+    # Known high-signal board URL patterns for active expansion
+    {
+        "id": "seed_nec",
+        "name": "중앙선거관리위원회",
+        "kind": "agency_board",
+        "list_url": "https://www.nec.go.kr/site/nec/ex/bbs/List.do?cbIdx=1107",
+    },
+    {
+        "id": "seed_acrc",
+        "name": "국민권익위원회 국외출장 현황",
+        "kind": "agency_board",
+        "list_url": "https://www.acrc.go.kr/board.es?mid=a10502060000&bid=1000",
+    },
+    {
+        "id": "seed_daegu",
+        "name": "대구광역시의회",
+        "kind": "council_board",
+        "list_url": "https://council.daegu.go.kr/kr/bbs?bbs_id=overseas",
+    },
+    {
+        "id": "seed_daejeon",
+        "name": "대전광역시의회",
+        "kind": "council_board",
+        "list_url": "https://council.daejeon.go.kr/svc/inf/TrainingReportList.do",
+    },
+    {
+        "id": "seed_ggc",
+        "name": "경기도의회",
+        "kind": "council_board",
+        "list_url": "https://www.ggc.go.kr/site/main/board/training_resrep/list",
+    },
+    {
+        "id": "seed_gb",
+        "name": "경상북도의회 공지",
+        "kind": "council_board",
+        "list_url": "https://council.gb.go.kr/kr/bbs?bbs_id=notice",
+    },
+]
+
+
+def score_discovery_html(html: str, final_url: str) -> dict[str, Any]:
+    text = html or ""
+    keywords = len(
+        re.findall(
+            r"국외출장|공무국외|해외출장|국외연수|국외훈련|출장결과|출장보고|해외연수|training_resrep|TrainingReport",
+            text,
+            re.I,
+        )
+    )
+    # Hard login wall signals only (not global nav "로그인" links)
+    hard_login = bool(
+        re.search(
+            r"(로그인\s*페이지|본인인증|공동인증서|간편인증|password|type=\"password\"|type='password'|SSO\s*Login|로그인이 필요)",
+            text,
+            re.I,
+        )
+    ) or (len(text) < 2500 and bool(re.search(r"로그인|login", text, re.I)))
+    attach_like = len(re.findall(r"Download|download|FileDown|fileDown|attach|\.pdf|\.hwp", text, re.I))
+    view_like = len(
+        re.findall(
+            r"View\.do|reform=view|act=view|TrainingReportView|training_resrep/\d+|/view",
+            text,
+            re.I,
+        )
+    )
+    status = "candidate"
+    if hard_login and keywords == 0:
+        status = "login_walled"
+    elif keywords == 0 and view_like == 0:
+        status = "low_signal"
+    elif keywords > 0 and (attach_like > 0 or view_like > 0 or len(text) > 20000):
+        status = "public_board_candidate"
+    return {
+        "url": final_url,
+        "status": status,
+        "keywordHits": keywords,
+        "attachmentHints": attach_like,
+        "viewHints": view_like,
+        "loginish": hard_login,
+        "title": clean_text(re.search(r"<title[^>]*>([^<]+)</title>", text).group(1)) if re.search(r"<title", text) else None,
+    }
+
+
+def discover_surfaces(client: Client, args: dict[str, Any]) -> dict[str, Any]:
+    """Actively probe known seeds + optional user URL/host to find public trip-report boards.
+
+    Login-walled systems are reported and excluded from recommendUse.
+    """
+    keyword = (args.get("keyword") or "국외출장").strip() or "국외출장"
+    extra_urls = [u.strip() for u in (args.get("urls") or []) if u and u.strip()]
+    results = []
+    recommend = []
+    excluded = []
+
+    # open portal always, federated
+    try:
+        open_payload = list_open_portal(client, {"keyword": keyword, "page": 1})
+        institutions = {}
+        for it in open_payload.get("items") or []:
+            inst = it.get("institution") or "unknown"
+            institutions[inst] = institutions.get(inst, 0) + 1
+        results.append(
+            {
+                "id": "open_portal",
+                "status": "ok",
+                "sourceUrl": open_payload.get("sourceUrl"),
+                "count": open_payload.get("count"),
+                "institutionHistogram": institutions,
+                "sampleTitles": [it.get("title") for it in (open_payload.get("items") or [])[:5]],
+            }
+        )
+        recommend.append("open_portal")
+    except FetchError as exc:
+        results.append({"id": "open_portal", "status": "error", "error": exc.mode, "message": str(exc)})
+
+    # seed boards
+    for seed in DISCOVERY_SEEDS:
+        if seed["id"] == "open_portal":
+            continue
+        try:
+            html, final = client.fetch_text(seed["list_url"])
+            scored = score_discovery_html(html, final)
+            scored.update({"id": seed["id"], "name": seed["name"], "kind": seed["kind"]})
+            results.append(scored)
+            if scored["status"] == "public_board_candidate":
+                recommend.append(seed["id"])
+            elif scored["status"] == "login_walled":
+                excluded.append({"id": seed["id"], "reason": "login_walled"})
+        except FetchError as exc:
+            results.append({"id": seed["id"], "status": "error", "error": exc.mode, "message": str(exc), "url": seed["list_url"]})
+
+    # optional user-supplied public URLs (still no arbitrary JS auth bypass)
+    for url in extra_urls:
+        host = urllib.parse.urlparse(url).netloc.lower()
+        if not host.endswith(".go.kr") and not host.endswith(".or.kr") and "open.go.kr" not in host:
+            excluded.append({"url": url, "reason": "host_not_public_gov_like"})
+            continue
+        try:
+            html, final = client.fetch_text(url)
+            scored = score_discovery_html(html, final)
+            scored.update({"id": f"custom:{host}", "name": host, "kind": "custom_probe"})
+            results.append(scored)
+            if scored["status"] == "public_board_candidate":
+                recommend.append(scored["id"])
+            elif scored["status"] == "login_walled":
+                excluded.append({"id": scored["id"], "reason": "login_walled"})
+        except FetchError as exc:
+            results.append({"id": f"custom:{host}", "status": "error", "error": exc.mode, "message": str(exc), "url": url})
+
+    # map recommend seed ids to built-in providers when available
+    seed_to_provider = {
+        "seed_nec": "nec",
+        "seed_acrc": "acrc",
+        "seed_daegu": "daegu_council",
+        "seed_daejeon": "daejeon_council",
+        "seed_ggc": "gyeonggi_council",
+        "seed_gb": "gyeongbuk_council",
+        "open_portal": "open_portal",
+    }
+    use_providers = []
+    for rid in recommend:
+        use_providers.append(seed_to_provider.get(rid, rid))
+
+    return {
+        "keyword": keyword,
+        "results": results,
+        "recommendUse": sorted(set(use_providers)),
+        "excludedLoginWalled": excluded,
+        "expansionHints": [
+            "Unknown ministry/council: start with open_portal keyword search and collect PROC_INSTT_NM histogram.",
+            "From institution names, open that org's 정보공개/사전정보공표/자료실 and look for 공무국외출장|출장결과|국외훈련 boards.",
+            "Accept only read-only public HTML/JSON surfaces. If login/SSO/cert wall appears, mark login_walled and stop.",
+            "When a new public board is found, record list URL, pagination param, detail linker, attachment pattern, then add a provider recipe.",
+            "Never automate CAPTCHA, paid FOI submission, or password entry.",
+        ],
+        "notAdjudication": "Discovery only. Not a corruption determination.",
+    }
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -832,6 +1024,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("providers", help="List verified providers")
+
+    disc = sub.add_parser("discover", help="Probe public boards / expand unknown agencies")
+    disc.add_argument("--keyword", default="국외출장")
+    disc.add_argument("--urls", default="", help="Comma-separated optional public .go.kr URLs to probe")
+    disc.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)
 
     lp = sub.add_parser("list", help="List items from a provider")
     lp.add_argument("--provider", required=True, choices=sorted(PROVIDERS))
@@ -865,6 +1062,14 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "providers":
             print(json.dumps(providers_payload(), ensure_ascii=False, indent=2))
             return 0
+
+        if args.cmd == "discover":
+            client = Client(timeout=getattr(args, "timeout", DEFAULT_TIMEOUT))
+            urls = [u.strip() for u in (args.urls or "").split(",") if u.strip()]
+            result = discover_surfaces(client, {"keyword": args.keyword, "urls": urls})
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+
 
         client = Client(timeout=getattr(args, "timeout", DEFAULT_TIMEOUT))
         if args.cmd == "list":
