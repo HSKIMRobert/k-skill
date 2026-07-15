@@ -15,6 +15,10 @@
 - `GET /v1/han-river/water-level`
 - `GET /v1/household-waste/info` — 생활쓰레기 배출정보(`DATA_GO_KR_API_KEY`; `pageNo=1`, `numOfRows=100` 필수)
 - `GET /v1/parking-lots/search` — 전국주차장정보표준데이터 기반 근처 공영주차장 검색(`DATA_GO_KR_API_KEY`)
+- `GET /v1/ev-charger/info` — 환경부 전기차 충전소 정보(`DATA_GO_KR_API_KEY`, 데이터셋 `15076352`)
+- `GET /v1/ev-charger/status` — 환경부 전기차 충전기 상태(`DATA_GO_KR_API_KEY`, 데이터셋 `15076352`)
+- `GET /v1/building-register/title` — 국토교통부 건축물대장 표제부(`DATA_GO_KR_API_KEY`, 데이터셋 `15134735`, XML upstream)
+- `GET /v1/keris-academic/search` — KERIS RISS 학술 메타데이터 검색(`KSKILL_RISS_API_KEY`, compatibility `RISS_API_KEY`, XML upstream)
 - `GET /v1/neis/school-search` — 나이스 학교기본정보(교육청명·학교명 검색)
 - `GET /v1/neis/school-meal` — 나이스 급식식단정보(일자별 메뉴)
 - `POST /v1/nts-business/status` — 국세청 사업자등록 상태조회(`DATA_GO_KR_API_KEY`)
@@ -80,6 +84,7 @@
 - `KAKAO_REST_API_KEY` — 프록시 서버 쪽 Kakao REST API 키 (`kakao-local/geocode`, `kakao-map/*`, `kakao-mobility/directions`)
 - `KRX_API_KEY` — 프록시 서버 쪽 KRX Open API upstream key
 - `KOSIS_API_KEY` 또는 `KSKILL_KOSIS_API_KEY` — 프록시 서버 쪽 KOSIS Open API upstream key (`kosis/search`, `kosis/meta`, `kosis/data`, `kosis/list`, `kosis/explain`, `kosis/indicator`)
+- `KSKILL_RISS_API_KEY` 또는 `RISS_API_KEY` — 프록시 서버 쪽 RISS 검색 Open API key (`keris-academic/search`). `DATA_GO_KR_API_KEY`를 사용하지 않는다.
 - `NAVER_SEARCH_CLIENT_ID`, `NAVER_SEARCH_CLIENT_SECRET` — 네이버 검색 Open API 키(`shop.json`, `news.json` 공통). 네이버 뉴스 route(`naver-news/search`)는 이 키가 **필수**이며 없으면 `503 upstream_not_configured` 를 돌려준다. 네이버 쇼핑 route(`naver-shopping/search`)는 **선택**이며 설정되면 공식 API 를 우선 사용하고, 없으면 공개 BFF JSON 파서로 fallback 한다. 공식 쇼핑 API 는 `review` 정렬을 지원하지 않아 `meta.sort_applied: "unsupported"`로 표시한다. no-key 쇼핑 fallback 은 `page`를 BFF에 전달해 해당 페이지를 고르고, `price_asc`/`price_dsc`/`review`는 선택 페이지 안에서 로컬 정렬하며, `date`는 `meta.sort_applied: "unsupported"`로 표시
 - `KSKILL_PROXY_HOST` — 기본 `127.0.0.1`
 - `KSKILL_PROXY_PORT` — local development listen port. Set it explicitly in your shell.
@@ -88,7 +93,7 @@
 - `KSKILL_PROXY_RATE_LIMIT_MAX` — 기본 `60`
 - `KSKILL_PROXY_RATE_LIMIT_MAX_CLIENTS` — 메모리에 유지할 client rate-limit bucket 상한, 기본 `10000`
 - `KSKILL_PROXY_TRUST_PROXY_HOPS` — Fastify가 신뢰할 reverse-proxy hop 수, 기본 `0`. 운영 reverse proxy 구조에 맞는 최소 hop 수만 설정하고 직접 노출되는 로컬 서버에서는 설정하지 않는다.
-- `DATA_GO_KR_API_KEY` - 공공데이터포털 에서 쓰이는 API 인증키 (`household-waste`, `parking-lots`, `real-estate`, `nts-business`, `mfds-drug-safety`, `mfds-food-safety`, `lh-notice`, `nhis/*`, `kr-whois/*`). 각 서비스는 공공데이터포털에서 별도 "활용신청" 승인이 필요하다. 키를 발급받은 뒤에는 [LH 임대공고문 정보](https://www.data.go.kr/data/15058530/openapi.do), [국민건강보험공단 장기요양기관 검색 서비스](https://www.data.go.kr/data/15059029/openapi.do), [국민건강보험공단 검진기관 찾기 조회](https://www.data.go.kr/data/15154419/openapi.do), WHOIS 도메인/IP 정보 API(서비스 `15094277`) 페이지에서도 활용신청을 눌러 동일 키를 활성화해야 해당 라우트가 성공한다. 미활성 상태에서는 upstream이 HTTP 403 Forbidden 또는 data.go.kr gateway 오류를 돌려주고 proxy는 upstream error로 변환한다.
+- `DATA_GO_KR_API_KEY` - 공공데이터포털 에서 쓰이는 API 인증키 (`household-waste`, `parking-lots`, `ev-charger/*`, `building-register/title`, `real-estate`, `nts-business`, `mfds-drug-safety`, `mfds-food-safety`, `lh-notice`, `nhis/*`, `kr-whois/*`). 각 서비스는 공공데이터포털에서 별도 "활용신청" 승인이 필요하다. EV 데이터셋 `15076352`와 건축물대장 데이터셋 `15134735`는 자동승인 대상이지만 각각 별도 신청해야 한다. 미활성 상태에서는 upstream이 HTTP 401/403 또는 data.go.kr 인증 오류 XML을 돌려주고 proxy는 upstream error로 변환한다.
 
 기본 정책은 **무료 API 공개 프록시 = 무인증** 이다. 대신 endpoint scope 를 좁게 유지하고, cache + rate limit 으로 남용을 늦춘다.
 
@@ -205,6 +210,34 @@ curl -fsS --get "${LOCAL_PROXY_BASE_URL}/v1/parking-lots/search" \
   --data-urlencode 'address_hint=서울특별시 종로구' \
   --data-urlencode 'limit=3' \
   --data-urlencode 'radius=1500'
+```
+
+전기차 충전소 정보·상태 예시 (`DATA_GO_KR_API_KEY`와 데이터셋 `15076352` 활용신청 필요):
+
+```bash
+curl -fsS --get "${LOCAL_PROXY_BASE_URL}/v1/ev-charger/info" \
+  --data-urlencode 'location=서울 강남구'
+
+curl -fsS --get "${LOCAL_PROXY_BASE_URL}/v1/ev-charger/status" \
+  --data-urlencode 'statId=ME000001' \
+  --data-urlencode 'limitYn=Y'
+```
+
+건축물대장 표제부 예시 (`DATA_GO_KR_API_KEY`와 데이터셋 `15134735` 활용신청 필요):
+
+```bash
+curl -fsS --get "${LOCAL_PROXY_BASE_URL}/v1/building-register/title" \
+  --data-urlencode 'pnu=1168010100101230004'
+```
+
+PNU의 11번째 자리 `1`(일반 토지)은 건축물대장 API `platGbCd=0`, `2`(산)는 `platGbCd=1`로 변환된다.
+
+RISS 학술자료 검색 예시 (`KSKILL_RISS_API_KEY` 필요):
+
+```bash
+curl -fsS --get "${LOCAL_PROXY_BASE_URL}/v1/keris-academic/search" \
+  --data-urlencode 'keyword=인공지능 교육' \
+  --data-urlencode 'resourceType=A'
 ```
 
 의약품 안전 체크 예시 (`DATA_GO_KR_API_KEY` 필요):

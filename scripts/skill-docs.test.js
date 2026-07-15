@@ -4293,3 +4293,21 @@ test("court auction pending changeset does not publish stale fallback or pageSiz
     );
   }
 });
+
+test("building register public docs use standard PNU land-category digits", () => {
+  const docs = [
+    ["feature guide", read(path.join("docs", "features", "building-register-search.md"))],
+    ["proxy feature guide", read(path.join("docs", "features", "k-skill-proxy.md"))],
+    ["proxy package README", read(path.join("packages", "k-skill-proxy", "README.md"))],
+  ];
+
+  for (const [label, doc] of docs) {
+    assert.doesNotMatch(doc, /1168010100001230004/, `${label} should not publish a PNU with land category 0`);
+    assert.match(doc, /1168010100101230004/, `${label} should publish a valid normal-land PNU example`);
+  }
+
+  const featureGuide = docs[0][1];
+  assert.match(featureGuide, /토지구분\(1\)/);
+  assert.match(featureGuide, /`1`\(일반 토지\)[\s\S]*`platGbCd=0`/);
+  assert.match(featureGuide, /`2`\(산\)[\s\S]*`platGbCd=1`/);
+});
