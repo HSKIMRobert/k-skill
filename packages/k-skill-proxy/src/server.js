@@ -64,7 +64,6 @@ const { normalizeG2bSanctionQuery, fetchG2bSanctions } = require("./g2b-sanction
 const { normalizeG2bOrderPlanQuery, fetchG2bOrderPlans } = require("./g2b-order-plan");
 const { fetchEvCharger, normalizeEvChargerQuery } = require("./ev-charger");
 const { fetchBuildingRegisterTitle, normalizeBuildingRegisterQuery } = require("./building-register");
-const { fetchKerisAcademicSearch, normalizeKerisAcademicQuery } = require("./keris-academic");
 const {
   normalizeKoreanLawDetailQuery,
   normalizeKoreanLawSearchQuery,
@@ -223,7 +222,6 @@ function buildConfig(env = process.env) {
     molitApiKey: trimOrNull(env.DATA_GO_KR_API_KEY),
     evChargerApiKey: trimOrNull(env.DATA_GO_KR_API_KEY),
     buildingRegisterApiKey: trimOrNull(env.DATA_GO_KR_API_KEY),
-    rissApiKey: trimOrNull(env.KSKILL_RISS_API_KEY) || trimOrNull(env.RISS_API_KEY),
     data4libraryAuthKey: trimOrNull(env.DATA4LIBRARY_AUTH_KEY),
     foodsafetyKoreaApiKey: trimOrNull(env.FOODSAFETYKOREA_API_KEY),
     kakaoRestApiKey: trimOrNull(env.KAKAO_REST_API_KEY),
@@ -2151,7 +2149,6 @@ function buildServer({ env = process.env, provider = null, now = () => new Date(
         g2bSanctionConfigured: Boolean(config.molitApiKey),
         evChargerConfigured: Boolean(config.evChargerApiKey),
         buildingRegisterConfigured: Boolean(config.buildingRegisterApiKey),
-        kerisAcademicConfigured: Boolean(config.rissApiKey),
         koreanLawConfigured: Boolean(config.lawOc)
       },
       auth: {
@@ -3126,32 +3123,6 @@ function buildServer({ env = process.env, provider = null, now = () => new Date(
         cache: { hit: false, ttl_ms: config.cacheTtlMs },
         requested_at: new Date().toISOString()
       }
-    };
-    cache.set(cacheKey, payload, config.cacheTtlMs);
-    return payload;
-  });
-
-  app.get("/v1/keris-academic/search", async (request, reply) => {
-    let normalized;
-    try {
-      normalized = normalizeKerisAcademicQuery(request.query || {});
-    } catch (error) {
-      reply.code(400);
-      return { error: "bad_request", message: error.message };
-    }
-    const cacheKey = makeCacheKey({ route: "keris-academic-search", ...normalized });
-    const cached = cache.get(cacheKey);
-    if (cached) return { ...cached, proxy: { ...cached.proxy, cache: { hit: true, ttl_ms: config.cacheTtlMs } } };
-    const extraCost = normalized.upstreamTypes.length - 1;
-    if (extraCost > 0 && !rateLimit(request, reply, extraCost)) return reply;
-    const result = await fetchKerisAcademicSearch({ params: normalized, apiKey: config.rissApiKey });
-    if (result.error) {
-      reply.code(result.status_code || 502);
-      return result;
-    }
-    const payload = {
-      ...result,
-      proxy: { name: config.proxyName, cache: { hit: false, ttl_ms: config.cacheTtlMs }, requested_at: new Date().toISOString() }
     };
     cache.set(cacheKey, payload, config.cacheTtlMs);
     return payload;

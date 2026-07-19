@@ -21,54 +21,45 @@ SPEC.loader.exec_module(keris_academic)
 class KerisAcademicHelperTests(unittest.TestCase):
     def test_single_type_pagination_command_contract(self):
         stdout = io.StringIO()
-        seen_urls = []
+        seen = []
 
-        def fake_http_get_json(url, timeout, via_proxy=True):
-            del timeout, via_proxy
-            seen_urls.append(url)
-            return {"page": 2, "page_size": 20, "total_count": 0, "items": []}
+        def fake_http(urls, timeout, page, page_size):
+            del timeout
+            seen.append((urls, page, page_size))
+            return {"page": page, "page_size": page_size, "total_count": 0, "items": []}
 
-        with mock.patch.object(keris_academic, "http_get_json", side_effect=fake_http_get_json), contextlib.redirect_stdout(stdout):
+        with mock.patch.dict(os.environ, {"KSKILL_RISS_API_KEY": "key"}, clear=True), \
+                mock.patch.object(keris_academic, "http_get_riss_xml", side_effect=fake_http), \
+                contextlib.redirect_stdout(stdout):
             code = keris_academic.run([
                 "search", "--keyword", "한국어 교육", "--resource-type", "D",
                 "--page", "2", "--page-size", "20", "--json",
             ])
 
         self.assertEqual(code, 0)
-        self.assertEqual(len(seen_urls), 1)
-        query = urllib.parse.parse_qs(urllib.parse.urlparse(seen_urls[0]).query)
-        self.assertEqual(query["resourceType"], ["D"])
-        self.assertEqual(query["page"], ["2"])
-        self.assertEqual(query["pageSize"], ["20"])
+        urls, page, page_size = seen[0]
+        self.assertEqual(len(urls), 1)
+        self.assertEqual((page, page_size), (2, 20))
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(urls[0]).query)
+        self.assertEqual(params["type"], ["A"])
+        self.assertEqual(params["rowcount"], ["20"])
+        self.assertEqual(params["rsnum"], ["21"])
         self.assertEqual(json.loads(stdout.getvalue())["page"], 2)
 
-    def test_proxy_url_has_no_caller_key_and_strict_pagination(self):
-        args = keris_academic.parse_args([
-            "search", "--keyword", "인공지능 교육", "--resource-type", "B",
-            "--page", "2", "--page-size", "25", "--proxy-base-url", "https://example.test",
-        ])
-        query = keris_academic.build_query(args)
-        self.assertEqual(query["page"], 2)
-        self.assertEqual(query["pageSize"], 25)
-        url = keris_academic.build_url(args, query, api_key=None)
-        self.assertTrue(url.startswith("https://example.test/v1/keris-academic/search?"))
-        self.assertNotIn("key=", url)
-        self.assertNotIn("serviceKey", url)
-
+    def test_build_query_strict_pagination_for_combined_types(self):
         combined = keris_academic.parse_args([
             "search", "--keyword", "교육", "--resource-type", "ALL", "--page", "2"
         ])
         with self.assertRaisesRegex(keris_academic.HelperError, "[Cc]ombined resourceType"):
             keris_academic.build_query(combined)
 
-    def test_direct_url_uses_riss_key_only_and_maps_book_alias(self):
+    def test_riss_url_uses_riss_key_only_and_maps_book_alias(self):
         args = keris_academic.parse_args([
-            "search", "--keyword", "도서관", "--resource-type", "B", "--direct"
+            "search", "--keyword", "도서관", "--resource-type", "B",
         ])
-        urls = keris_academic.build_direct_urls(args, keris_academic.build_query(args), "secret +/==")
+        urls = keris_academic.build_riss_urls(keris_academic.build_query(args), "secret +/==")
         self.assertEqual(len(urls), 1)
-        parsed = urllib.parse.urlparse(urls[0])
-        params = urllib.parse.parse_qs(parsed.query)
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(urls[0]).query)
         self.assertEqual(params["key"], ["secret +/=="])
         self.assertEqual(params["version"], ["1.0"])
         self.assertEqual(params["type"], ["U"])
@@ -76,7 +67,7 @@ class KerisAcademicHelperTests(unittest.TestCase):
 
     def test_key_resolution_never_uses_data_go_kr_key(self):
         args = keris_academic.parse_args([
-            "search", "--keyword", "교육", "--direct", "--secrets-path", "/tmp/missing-riss-secrets"
+            "search", "--keyword", "교육", "--secrets-path", "/tmp/missing-riss-secrets"
         ])
         with mock.patch.dict(os.environ, {
             "KSKILL_RISS_API_KEY": "primary",
@@ -91,43 +82,48 @@ class KerisAcademicHelperTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"DATA_GO_KR_API_KEY": "wrong"}, clear=True):
             self.assertIsNone(keris_academic.resolve_api_key(args))
 
-    def test_direct_missing_key_names_riss_variables(self):
+    def test_missing_key_names_riss_variables_and_issuance(self):
         stderr = io.StringIO()
         with mock.patch.dict(os.environ, {}, clear=True), contextlib.redirect_stderr(stderr):
             code = keris_academic.run([
-                "search", "--keyword", "교육", "--direct", "--secrets-path", "/tmp/missing-riss-secrets"
+                "search", "--keyword", "교육", "--secrets-path", "/tmp/missing-riss-secrets"
             ])
         self.assertEqual(code, 1)
-        self.assertIn("KSKILL_RISS_API_KEY", stderr.getvalue())
-        self.assertIn("RISS_API_KEY", stderr.getvalue())
-        self.assertNotIn("DATA_GO_KR_API_KEY", stderr.getvalue())
+        output = stderr.getvalue()
+        self.assertIn("KSKILL_RISS_API_KEY", output)
+        self.assertIn("RISS_API_KEY", output)
+        self.assertIn("apicenter", output)
+        self.assertNotIn("DATA_GO_KR_API_KEY", output)
 
-    def test_timeout_is_reported_without_traceback_for_proxy_and_direct(self):
-        stderr = io.StringIO()
-        with mock.patch.object(keris_academic.urllib.request, "urlopen", side_effect=TimeoutError("timed out")), contextlib.redirect_stderr(stderr):
-            code = keris_academic.run(["search", "--keyword", "교육"])
-        self.assertEqual(code, 1)
-        self.assertIn("시간이 초과", stderr.getvalue())
-        self.assertNotIn("Traceback", stderr.getvalue())
-
+    def test_timeout_is_reported_without_traceback(self):
         stderr = io.StringIO()
         with mock.patch.dict(os.environ, {"KSKILL_RISS_API_KEY": "key"}, clear=True), mock.patch.object(
             keris_academic.urllib.request, "urlopen", side_effect=TimeoutError("timed out")
         ), contextlib.redirect_stderr(stderr):
-            code = keris_academic.run(["search", "--keyword", "교육", "--resource-type", "T", "--direct"])
+            code = keris_academic.run(["search", "--keyword", "교육", "--resource-type", "T"])
         self.assertEqual(code, 1)
         self.assertIn("시간이 초과", stderr.getvalue())
         self.assertNotIn("Traceback", stderr.getvalue())
 
-    def test_dry_run_redacts_direct_key_for_all_resource_types(self):
+    def test_forbidden_key_maps_to_readable_error(self):
+        stderr = io.StringIO()
+        http_error = keris_academic.urllib.error.HTTPError("u", 403, "Forbidden", {}, None)
+        with mock.patch.dict(os.environ, {"KSKILL_RISS_API_KEY": "key"}, clear=True), mock.patch.object(
+            keris_academic.urllib.request, "urlopen", side_effect=http_error
+        ), contextlib.redirect_stderr(stderr):
+            code = keris_academic.run(["search", "--keyword", "교육", "--resource-type", "T"])
+        self.assertEqual(code, 1)
+        self.assertIn("403", stderr.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue())
+
+    def test_dry_run_redacts_key_for_all_resource_types_without_key_env(self):
         stdout = io.StringIO()
-        with mock.patch.dict(os.environ, {"KSKILL_RISS_API_KEY": "super-secret"}, clear=True), contextlib.redirect_stdout(stdout):
+        with mock.patch.dict(os.environ, {}, clear=True), contextlib.redirect_stdout(stdout):
             code = keris_academic.run([
-                "search", "--keyword", "교육", "--resource-type", "ALL", "--direct", "--dry-run"
+                "search", "--keyword", "교육", "--resource-type", "ALL", "--dry-run"
             ])
         self.assertEqual(code, 0)
         output = stdout.getvalue()
-        self.assertNotIn("super-secret", output)
         self.assertIn("REDACTED", output)
         payload = json.loads(output)
         self.assertGreaterEqual(len(payload["urls"]), 4)
@@ -159,10 +155,12 @@ class KerisAcademicHelperTests(unittest.TestCase):
         with self.assertRaisesRegex(keris_academic.HelperError, "totalcount"):
             keris_academic.parse_riss_xml(b"<record><head><totalcount>many</totalcount><Error>0</Error></head></record>")
 
-    def test_proxy_result_supports_json_output(self):
-        payload = {"total_count": 0, "items": []}
+    def test_result_supports_json_output(self):
+        payload = {"page": 1, "page_size": 10, "total_count": 0, "items": []}
         stdout = io.StringIO()
-        with mock.patch.object(keris_academic, "http_get_json", return_value=payload), contextlib.redirect_stdout(stdout):
+        with mock.patch.dict(os.environ, {"KSKILL_RISS_API_KEY": "key"}, clear=True), \
+                mock.patch.object(keris_academic, "http_get_riss_xml", return_value=payload), \
+                contextlib.redirect_stdout(stdout):
             code = keris_academic.run(["search", "--keyword", "없는검색어", "--json"])
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(stdout.getvalue())["items"], [])

@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Read-only KERIS/RISS academic metadata search helper using stdlib only."""
+"""Read-only KERIS/RISS academic metadata search helper using stdlib only.
+
+RISS 검색 Open API는 기관/대학 전용 인증키를 요구하므로 k-skill-proxy를 거치지
+않고, 사용자가 직접 발급받은 RISS 키로 상류(``https://www.riss.kr/openApi``)를
+호출한다.
+"""
 
 from __future__ import annotations
 
@@ -14,12 +19,14 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from typing import Any, Dict, List, Optional
 
-DEFAULT_PROXY_BASE_URL = "https://k-skill-proxy.nomadamas.org"
 DEFAULT_SECRETS_PATH = pathlib.Path("~/.config/k-skill/secrets.env").expanduser()
 RISS_OPEN_API_URL = "https://www.riss.kr/openApi"
 RESOURCE_TYPE_MAP = {"ALL": ["T", "A", "O", "U", "F", "S"], "T": ["T"], "A": ["A", "O"], "D": ["A"], "B": ["U"]}
-PROXY_DOWN_MSG = "설정된 k-skill-proxy 프록시 서버가 응답하지 않습니다. 잠시 후 재시도하거나 운영자에게 문의하세요."
-PROXY_NOT_CONFIGURED_MSG = "k-skill-proxy에 RISS API 키가 설정되어 있지 않습니다. 운영자에게 문의하세요."
+MISSING_KEY_MSG = (
+    "RISS API 키가 없습니다. RISS API 센터(https://www.riss.kr/apicenter/apiMain.do)에서 "
+    "검색 API 키를 발급받아 KSKILL_RISS_API_KEY(호환 RISS_API_KEY) 환경변수 또는 "
+    "~/.config/k-skill/secrets.env 에 설정하세요. RISS 키는 비영리 기관/대학에 발급됩니다."
+)
 
 
 class HelperError(RuntimeError):
@@ -71,14 +78,7 @@ def build_query(args: argparse.Namespace) -> Dict[str, Any]:
     return query
 
 
-def build_url(args: argparse.Namespace, query: Dict[str, Any], api_key: Optional[str]) -> str:
-    del api_key
-    return f"{args.proxy_base_url.rstrip('/')}/v1/keris-academic/search?{urllib.parse.urlencode(query)}"
-
-
-def build_direct_urls(args: argparse.Namespace, query: Dict[str, Any], api_key: Optional[str]) -> List[str]:
-    if not api_key:
-        raise HelperError("KSKILL_RISS_API_KEY 또는 RISS_API_KEY가 없습니다. RISS API 센터에서 검색 API 키를 발급받아 설정하세요.")
+def build_riss_urls(query: Dict[str, Any], api_key: str) -> List[str]:
     rsnum = ((query["page"] - 1) * query["pageSize"]) + 1
     urls = []
     for upstream_type in RESOURCE_TYPE_MAP[query["resourceType"]]:
@@ -86,34 +86,6 @@ def build_direct_urls(args: argparse.Namespace, query: Dict[str, Any], api_key: 
         params.update({"key": api_key, "version": "1.0", "type": upstream_type, "rsnum": rsnum, "rowcount": query["pageSize"]})
         urls.append(f"{RISS_OPEN_API_URL}?{urllib.parse.urlencode(params)}")
     return urls
-
-
-def http_get_json(url: str, timeout: int, via_proxy: bool = True) -> Dict[str, Any]:
-    request = urllib.request.Request(url, headers={"accept": "application/json", "user-agent": "k-skill/keris-academic-search"})
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            raw = response.read().decode("utf-8", errors="replace")
-    except urllib.error.HTTPError as error:
-        body = error.read().decode("utf-8", errors="replace") if error.fp else ""
-        try:
-            payload = json.loads(body)
-        except json.JSONDecodeError:
-            payload = {}
-        if via_proxy and error.code == 503 and payload.get("error") == "upstream_not_configured":
-            raise HelperError(PROXY_NOT_CONFIGURED_MSG) from error
-        raise HelperError(str(payload.get("message") or f"API HTTP 오류: {error.code} {error.reason}")) from error
-    except urllib.error.URLError as error:
-        raise HelperError(f"{PROXY_DOWN_MSG} (상세: {error.reason})" if via_proxy else f"RISS API 네트워크 오류: {error.reason}") from error
-    except TimeoutError as error:
-        target = "프록시 서버" if via_proxy else "RISS API"
-        raise HelperError(f"{target} 요청 시간이 초과되었습니다.") from error
-    try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError as error:
-        raise HelperError("API 응답이 올바른 JSON이 아닙니다.") from error
-    if not isinstance(payload, dict):
-        raise HelperError("API 응답 형식이 올바르지 않습니다.")
-    return payload
 
 
 def parse_riss_xml(raw: bytes) -> Dict[str, Any]:
@@ -154,15 +126,21 @@ def parse_riss_xml(raw: bytes) -> Dict[str, Any]:
     return {"total_count": total_count, "items": items}
 
 
-def http_get_direct_xml(urls: List[str], timeout: int, page: int, page_size: int) -> Dict[str, Any]:
+def http_get_riss_xml(urls: List[str], timeout: int, page: int, page_size: int) -> Dict[str, Any]:
     results = []
     for url in urls:
         request = urllib.request.Request(url, headers={"accept": "application/xml", "user-agent": "k-skill/keris-academic-search"})
         try:
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 results.append(parse_riss_xml(response.read()))
-        except (urllib.error.HTTPError, urllib.error.URLError) as error:
-            raise HelperError(f"RISS API 요청 실패: {error}") from error
+        except urllib.error.HTTPError as error:
+            if error.code in (401, 403):
+                raise HelperError("RISS API가 키를 거부했습니다(HTTP 403). 발급받은 RISS 검색 API 키와 기관 권한을 확인하세요.") from error
+            if error.code == 429:
+                raise HelperError("RISS API 호출량/쿼터를 초과했습니다(HTTP 429).") from error
+            raise HelperError(f"RISS API 요청 실패: HTTP {error.code} {error.reason}") from error
+        except urllib.error.URLError as error:
+            raise HelperError(f"RISS API 네트워크 오류: {error.reason}") from error
         except TimeoutError as error:
             raise HelperError("RISS API 요청 시간이 초과되었습니다.") from error
     queues = [list(result["items"]) for result in results]
@@ -197,8 +175,6 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("--resource-type", choices=RESOURCE_TYPE_MAP, default="ALL")
     search.add_argument("--page", type=int, default=1)
     search.add_argument("--page-size", type=int, default=10)
-    search.add_argument("--proxy-base-url", default=os.environ.get("KSKILL_PROXY_BASE_URL", DEFAULT_PROXY_BASE_URL))
-    search.add_argument("--direct", action="store_true")
     search.add_argument("--secrets-path", default=str(DEFAULT_SECRETS_PATH))
     search.add_argument("--timeout", type=int, default=20)
     search.add_argument("--dry-run", action="store_true")
@@ -212,21 +188,22 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
 
 def run(argv: Optional[List[str]] = None) -> int:
     try:
-        args, query = parse_args(argv), None
+        args = parse_args(argv)
         query = build_query(args)
-        if args.direct:
-            urls = build_direct_urls(args, query, "REDACTED" if args.dry_run else resolve_api_key(args))
-            if args.dry_run:
-                print(json.dumps({"operation": "search", "urls": urls, "query": query}, ensure_ascii=False, indent=2)); return 0
-            payload = http_get_direct_xml(urls, args.timeout, query["page"], query["pageSize"])
-        else:
-            url = build_url(args, query, None)
-            if args.dry_run:
-                print(json.dumps({"operation": "search", "url": url, "query": query}, ensure_ascii=False, indent=2)); return 0
-            payload = http_get_json(url, args.timeout)
-        print(json.dumps(payload, ensure_ascii=False, indent=2) if args.json else format_text(payload)); return 0
+        if args.dry_run:
+            urls = build_riss_urls(query, "REDACTED")
+            print(json.dumps({"operation": "search", "urls": urls, "query": query}, ensure_ascii=False, indent=2))
+            return 0
+        api_key = resolve_api_key(args)
+        if not api_key:
+            raise HelperError(MISSING_KEY_MSG)
+        urls = build_riss_urls(query, api_key)
+        payload = http_get_riss_xml(urls, args.timeout, query["page"], query["pageSize"])
+        print(json.dumps(payload, ensure_ascii=False, indent=2) if args.json else format_text(payload))
+        return 0
     except HelperError as error:
-        print(str(error), file=sys.stderr); return 1
+        print(str(error), file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

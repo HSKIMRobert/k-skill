@@ -14,7 +14,7 @@
 - 환경부 무공해차 통합누리집 구매보조금 지급현황: https://ev.or.kr/nportal/buySupprt/initSubsidyPaymentCheckAction.do — 로그인 없는 공개 POST 응답에서 지자체별 민간공고·접수·출고·출고잔여 대수와 비고를 제공한다. `pnp4web` 보호 응답은 공개 문자표만 파싱해 복원하며 원격 코드를 실행하지 않는다.
 - 환경부 무공해차 통합누리집 모델별 보조금: https://ev.or.kr/nportal/buySupprt/psPopupLocalCarModelPrice.do — `year`, `local_cd`, `car_type`을 받는 로그인 없는 공개 POST 표면으로 모델별 국비·지방비·합계와 전환지원금을 제공한다.
 - 공공데이터포털 건축물대장정보 서비스: https://www.data.go.kr/data/15134735/openapi.do — 공식 `https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo` XML을 `/v1/building-register/title`이 파싱한다. 주소 입력은 `/v1/kakao-local/geocode`의 10자리 법정동 `b_code`와 필지 번호를 먼저 사용한다. 기존 키와 별개로 데이터셋 활용신청이 필요하며 자동승인 대상이다.
-- RISS 검색 API 센터: https://www.riss.kr/apicenter/apiSearchThesis.do 및 자료유형별 API 정보 — `https://www.riss.kr/openApi`의 `key`, `version=1.0`, type별 XML, `rsnum`, `rowcount(최대100)` 계약을 `/v1/keris-academic/search`가 사용한다. 공공데이터포털 `15071949`는 관련 정적 종합목록/카탈로그 데이터로만 기록하며 논문 검색에 사용하지 않는다.
+- RISS 검색 API 센터: https://www.riss.kr/apicenter/apiMain.do 및 자료유형별 API 정보 — `https://www.riss.kr/openApi`의 `key`, `version=1.0`, type별 XML, `rsnum`, `rowcount(최대100)` 계약을 `keris-academic-search` 스킬이 사용자 본인 키로 직접 호출한다. RISS 검색 API 키는 비영리 기관/대학에만 발급되므로 프록시 route로 제공하지 않는다. 공공데이터포털 `15071949`는 관련 정적 종합목록/카탈로그 데이터로만 기록하며 논문 검색에 사용하지 않는다.
 - 전국전기차충전소표준데이터: https://www.data.go.kr/data/15013115/standard.do — live API 실패 시 포털에서 사용자가 직접 내려받은 CSV를 정적/수동 fallback으로만 사용한다. 문서화되지 않은 CSV URL은 추측하지 않는다.
 - 숲나들e 공식 사이트: https://foresttrip.go.kr/index.jsp
 - 숲나들e 로그인: https://www.foresttrip.go.kr/com/login.do

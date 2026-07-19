@@ -158,7 +158,7 @@ npx --yes skills add <owner/repo> \
 
 `building-register-search` 는 주소를 hosted Kakao geocode로 법정동 코드·필지로 바꾼 뒤 `/v1/building-register/title`을 호출하거나 PNU를 바로 조회한다. hosted 사용자는 키가 필요 없다. `--direct`는 PNU/개별 필지만 지원하고 `KSKILL_BUILDING_REGISTER_API_KEY` 또는 `DATA_GO_KR_API_KEY`를 사용하며, 데이터셋 `15134735` 활용신청은 별도로 필요하다. 건축물대장은 권리관계 자료가 아니므로 소유권·근저당 확인은 `iros-registry-automation`을 사용한다. 자세한 사용법은 [건축물대장 표제부 조회 가이드](features/building-register-search.md)를 본다.
 
-`keris-academic-search` 는 hosted `/v1/keris-academic/search`로 RISS 학술 메타데이터를 조회한다. 일반 사용자는 키가 필요 없고 `--direct`에서만 `KSKILL_RISS_API_KEY` 또는 compatibility `RISS_API_KEY`를 사용한다. `DATA_GO_KR_API_KEY`는 RISS 검색 키가 아니다.
+`keris-academic-search` 는 RISS 검색 Open API로 학술 메타데이터를 조회한다. RISS 검색 API는 기관 전용 키를 요구하므로 프록시를 거치지 않고 사용자 본인이 발급받은 `KSKILL_RISS_API_KEY`(호환 `RISS_API_KEY`)로 직접 호출한다. RISS 키는 비영리 기관/대학에만 발급되며 `DATA_GO_KR_API_KEY`와는 별개다. 발급 방법은 [KERIS/RISS 학술자료 검색 가이드](features/keris-academic-search.md)를 본다.
 
 `library-book-search` 는 별도 설치 없이 기본 hosted proxy(`k-skill-proxy.nomadamas.org`)를 통해 바로 사용할 수 있다. 사용자 쪽 `DATA4LIBRARY_AUTH_KEY` 는 불필요하고, self-host proxy 운영자만 프록시 서버 환경변수로 설정한다. 자세한 사용법은 [도서관 도서 조회 가이드](features/library-book-search.md)를 본다.
 
