@@ -146,6 +146,27 @@ test("rate limiter bounds tracked client IPs", () => {
   assert.equal(limiter({ ip: "198.51.100.4" }, reply), true, "expired entries should be removed before eviction");
 });
 
+test("route usage stats count endpoint calls by route pattern and skip /health", async (t) => {
+  const app = buildServer({ env: {} });
+  t.after(async () => {
+    await app.close();
+  });
+
+  const health = await app.inject({ method: "GET", url: "/health" });
+  assert.equal(health.statusCode, 200);
+  assert.equal(app.routeUsageStats.size, 0, "health checks must not be counted as usage");
+
+  await app.inject({ method: "GET", url: "/v1/kr-whois/domain?domain=example.kr" });
+  await app.inject({ method: "GET", url: "/v1/kr-whois/domain?domain=example.kr" });
+  await app.inject({ method: "GET", url: "/v1/kr-whois/ip?ip=8.8.8.8" });
+  assert.equal(app.routeUsageStats.get("/v1/kr-whois/domain"), 2);
+  assert.equal(app.routeUsageStats.get("/v1/kr-whois/ip"), 1);
+
+  const notFound = await app.inject({ method: "GET", url: "/v1/no-such-route?x=1" });
+  assert.equal(notFound.statusCode, 404);
+  assert.equal(app.routeUsageStats.get("/v1/no-such-route"), 1, "unmatched paths fall back to the raw path without query string");
+});
+
 test("Korean holiday normalizer validates operation and solar year/month", () => {
   assert.deepEqual(normalizeKoreanHolidayQuery({ type: "rest", year: "2026", month: "7", limit: "20" }), {
     operation: "rest",
